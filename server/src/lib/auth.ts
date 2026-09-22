@@ -235,6 +235,8 @@ const pluginList = [
     : []),
 ];
 
+const secureCookies = process.env.NODE_ENV === "production" && getAuthBaseUrl().startsWith("https://");
+
 export const auth = betterAuth({
   basePath: "/api/auth",
   baseURL: getAuthBaseUrl(),
@@ -328,9 +330,9 @@ export const auth = betterAuth({
   plugins: pluginList,
   trustedOrigins: getTrustedCorsOrigins(),
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === "production", // don't mark Secure in dev
+    useSecureCookies: secureCookies,
     defaultCookieAttributes: {
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: secureCookies ? "none" : "lax",
       path: "/",
     },
   },
