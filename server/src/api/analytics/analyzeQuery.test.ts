@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 const { getSitesUserHasAccessTo } = vi.hoisted(() => ({ getSitesUserHasAccessTo: vi.fn() }));
 const { streamOpenRouter } = vi.hoisted(() => ({ streamOpenRouter: vi.fn() }));
+const { callOpenRouterWithTools } = vi.hoisted(() => ({ callOpenRouterWithTools: vi.fn() }));
 const { canReadConversation, saveAiExchange } = vi.hoisted(() => ({
   canReadConversation: vi.fn(),
   saveAiExchange: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock("../../lib/auth-utils.js", () => ({ getSitesUserHasAccessTo }));
 vi.mock("../../lib/openrouter.js", async importOriginal => ({
   ...(await importOriginal<typeof import("../../lib/openrouter.js")>()),
   streamOpenRouter,
+  callOpenRouterWithTools,
 }));
 vi.mock("./aiConversations.js", () => ({ canReadConversation, saveAiExchange }));
 
@@ -60,9 +62,19 @@ describe("analyzeQuery", () => {
   it("streams the scoped result, summary deltas, and completion while preserving CORS headers", async () => {
     getSitesUserHasAccessTo.mockResolvedValue([{ organizationId: "org-1", siteId: 42 }]);
     query.mockResolvedValue({ query_id: "test", json: async () => [{ visits: 4 }] });
+    callOpenRouterWithTools.mockResolvedValue({
+      content: "",
+      toolCalls: [
+        {
+          id: "tool-1",
+          type: "function",
+          function: { name: "render_table", arguments: '{"title":"Visits","columns":["visits"],"row_indices":[0]}' },
+        },
+      ],
+    });
     streamOpenRouter.mockImplementation(async function* (messages: Array<{ content: string }>) {
-      expect(messages[0].content).toContain("[display:none]");
-      yield "[display:table]\nFour ";
+      expect(messages[messages.length - 1]?.content).toContain('"success":true');
+      yield "Four ";
       yield "visits";
     });
     saveAiExchange.mockResolvedValue("e8dfdb2e-8159-4d51-a56d-22404613da4e");
@@ -97,14 +109,20 @@ describe("analyzeQuery", () => {
         "Content-Type": "text/event-stream; charset=utf-8",
       })
     );
-    expect(lines.map(line => JSON.parse(line.slice(6)).type)).toEqual(["result", "delta", "delta", "done"]);
+    expect(lines.map(line => JSON.parse(line.slice(6)).type)).toEqual(["result", "artifact", "delta", "delta", "done"]);
     expect(JSON.parse(lines[0].slice(6)).rows).toEqual([{ visits: 4 }]);
+    expect(JSON.parse(lines[1].slice(6)).artifact).toEqual({
+      type: "table",
+      title: "Visits",
+      columns: ["visits"],
+      rows: [["4"]],
+    });
     expect(saveAiExchange).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         organizationId: "org-1",
         siteId: 42,
-        summary: "[display:table]\nFour visits",
+        summary: expect.stringContaining('<!--rybbit-artifact:{"type":"table"'),
       })
     );
     expect(JSON.parse(lines[lines.length - 1].slice(6)).conversationId).toBe("e8dfdb2e-8159-4d51-a56d-22404613da4e");

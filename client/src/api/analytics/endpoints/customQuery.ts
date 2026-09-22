@@ -36,15 +36,43 @@ export type AnalyzeQueryResponse = {
   summary: string;
   rows: CustomQueryRow[];
   rowCount: number;
+  artifact?: AnalysisArtifact;
 };
 
 export type AiConversation = { id: string; title: string; updatedAt: string };
 export type AnalysisDisplay = "none" | "table" | "bar" | "line" | "donut";
+export type AnalysisArtifact =
+  | { type: "table"; title: string; columns: string[]; rows: string[][] }
+  | { type: "chart"; title: string; chartType: "bar" | "line" | "donut"; points: { label: string; value: number }[] }
+  | { type: "form"; question: string; options: string[] };
 
-export function parseAnalysisSummary(summary: string): { display: AnalysisDisplay; text: string } {
+export function parseAnalysisSummary(summary: string): {
+  display: AnalysisDisplay;
+  text: string;
+  artifact?: AnalysisArtifact;
+} {
+  const marker = /^<!--rybbit-artifact:(\{[^\n]*\})-->\n/.exec(summary);
+  let artifact: AnalysisArtifact | undefined;
+  if (marker) {
+    try {
+      artifact = JSON.parse(marker[1]) as AnalysisArtifact;
+    } catch {
+      /* Old or malformed metadata: show the answer. */
+    }
+    summary = summary.slice(marker[0].length);
+  }
   const prefix = /^\[display:(none|table|bar|line|donut)\]\r?\n/i.exec(summary);
-  if (prefix) return { display: prefix[1].toLowerCase() as AnalysisDisplay, text: summary.slice(prefix[0].length) };
-  return { display: "none", text: summary.startsWith("[display:") && !summary.includes("\n") ? "" : summary };
+  if (prefix)
+    return {
+      display: prefix[1].toLowerCase() as AnalysisDisplay,
+      text: summary.slice(prefix[0].length),
+      ...(artifact ? { artifact } : {}),
+    };
+  return {
+    display: "none",
+    text: summary.startsWith("[display:") && !summary.includes("\n") ? "" : summary,
+    ...(artifact ? { artifact } : {}),
+  };
 }
 export type SavedAiExchange = {
   question: string;
@@ -118,6 +146,7 @@ export async function analyzeQuery(
           result = { query: event.query, rows: event.rows, rowCount: event.rowCount, summary: "" };
         if (event.type === "delta" && result && typeof event.text === "string")
           result = { ...result, summary: result.summary + event.text };
+        if (event.type === "artifact" && result) result = { ...result, artifact: event.artifact };
         if (event.type === "done") {
           complete = true;
           if (result) result = { ...result, conversationId: event.conversationId };

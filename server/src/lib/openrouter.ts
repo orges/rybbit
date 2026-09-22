@@ -9,6 +9,7 @@ interface OpenRouterResponse {
     message?: {
       role?: string;
       content?: string | null;
+      tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
     };
     finish_reason?: string | null;
     native_finish_reason?: string | null;
@@ -50,6 +51,18 @@ type OpenRouterOptions = {
   maxTokens?: number;
   model?: string;
   signal?: AbortSignal;
+};
+
+export type OpenRouterMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_call_id?: string;
+  tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
+};
+
+export type OpenRouterTool = {
+  type: "function";
+  function: { name: string; description: string; parameters: object };
 };
 
 export class OpenRouterError extends Error {
@@ -161,9 +174,10 @@ export async function callOpenRouterWithMetadata(
 }
 
 async function requestOpenRouter(
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  messages: OpenRouterMessage[],
   options?: OpenRouterOptions,
-  stream = false
+  stream = false,
+  tools?: OpenRouterTool[]
 ) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   const model = getOpenRouterModel(options?.model);
@@ -181,18 +195,30 @@ async function requestOpenRouter(
       messages,
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? 1000,
-      ...(process.env.OPENROUTER_REASONING_EFFORT
-        ? { reasoning_effort: process.env.OPENROUTER_REASONING_EFFORT }
-        : {}),
+      ...(process.env.OPENROUTER_REASONING_EFFORT ? { reasoning_effort: process.env.OPENROUTER_REASONING_EFFORT } : {}),
       ...(stream ? { stream: true } : {}),
+      ...(tools ? { tools, tool_choice: "auto" } : {}),
     }),
     signal: options?.signal,
   });
   return { response, model };
 }
 
+export async function callOpenRouterWithTools(
+  messages: OpenRouterMessage[],
+  tools: OpenRouterTool[],
+  signal?: AbortSignal
+) {
+  const { response, model } = await requestOpenRouter(messages, { signal, maxTokens: 700 }, false, tools);
+  if (!response.ok) throw new OpenRouterError("http_error", `OpenRouter API error: ${response.status}`, { model });
+  const data = (await response.json()) as OpenRouterResponse;
+  const message = data.choices?.[0]?.message;
+  if (!message) throw new OpenRouterError("empty_choices", "No response from OpenRouter", { model });
+  return { content: message.content ?? "", toolCalls: message.tool_calls ?? [] };
+}
+
 export async function* streamOpenRouter(
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  messages: OpenRouterMessage[],
   options?: OpenRouterOptions
 ): AsyncGenerator<string> {
   const { response, model } = await requestOpenRouter(messages, options, true);

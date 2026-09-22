@@ -51,4 +51,36 @@ it("keeps presentation choices out of streamed and saved answers", () => {
   });
   expect(parseAnalysisSummary("[display:ta")).toEqual({ display: "none", text: "" });
   expect(parseAnalysisSummary("Legacy answer")).toEqual({ display: "none", text: "Legacy answer" });
+  expect(
+    parseAnalysisSummary(
+      '<!--rybbit-artifact:{"type":"table","title":"Visits","columns":["visits"],"rows":[["4"]]}-->\nFour visits'
+    )
+  ).toEqual({
+    display: "none",
+    text: "Four visits",
+    artifact: { type: "table", title: "Visits", columns: ["visits"], rows: [["4"]] },
+  });
+});
+
+it("streams a model tool artifact alongside its answer", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          'data: {"type":"result","query":"SELECT count() FROM scoped_events","rows":[{"visits":4}],"rowCount":1}\n\n' +
+            'data: {"type":"artifact","artifact":{"type":"table","title":"Visits","columns":["visits"],"rows":[["4"]]}}\n\n' +
+            'data: {"type":"delta","text":"Four visits"}\n\ndata: {"type":"done"}\n\n'
+        )
+      )
+  );
+  const result = await analyzeQuery(
+    "org-1",
+    { query: "SELECT count() FROM scoped_events", question: "Visits?", siteId: 42 },
+    new AbortController().signal,
+    vi.fn()
+  );
+  expect(result.artifact).toEqual({ type: "table", title: "Visits", columns: ["visits"], rows: [["4"]] });
+  expect(result.summary).toBe("Four visits");
 });

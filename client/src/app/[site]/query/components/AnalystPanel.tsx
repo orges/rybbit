@@ -364,6 +364,67 @@ export function AnalystPanel({
                           : parseAnalysisSummary(exchange.result.summary).display
                       }
                     />
+                    {(() => {
+                      const artifact =
+                        exchange.result.artifact ?? parseAnalysisSummary(exchange.result.summary).artifact;
+                      if (!artifact) return null;
+                      if (artifact.type === "chart")
+                        return (
+                          <div className="space-y-2">
+                            <h3 className="font-medium">{artifact.title}</h3>
+                            <ResultChart
+                              rows={artifact.points.map(point => ({ label: point.label, value: point.value }))}
+                              rowCount={artifact.points.length}
+                              display={artifact.chartType}
+                            />
+                          </div>
+                        );
+                      if (artifact.type === "form")
+                        return (
+                          <div className="space-y-2">
+                            <p className="font-medium">{artifact.question}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {artifact.options.map(option => (
+                                <Button
+                                  key={option}
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setQuestion(option)}
+                                >
+                                  {option}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      return (
+                        <div className="overflow-x-auto">
+                          <h3 className="mb-2 font-medium">{artifact.title}</h3>
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr>
+                                {artifact.columns.map(column => (
+                                  <th key={column} className="whitespace-nowrap border-b p-2">
+                                    {column}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {artifact.rows.map((row, index) => (
+                                <tr key={index}>
+                                  {row.map((value, column) => (
+                                    <td key={column} className="max-w-64 border-b p-2" title={value}>
+                                      {value}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
                     <details className="text-xs">
                       <summary className="cursor-pointer">{t("View SQL")}</summary>
                       <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">

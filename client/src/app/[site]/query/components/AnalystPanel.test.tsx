@@ -127,14 +127,14 @@ it("renders model-authored Markdown and follows incoming messages until the read
   });
 });
 
-it("renders only the rows the model selected from a truncated preview", async () => {
+it("renders only the rows the table tool selected from a truncated preview", async () => {
   mocks.list.mockResolvedValue([{ id: "saved-1", title: "Pagination", updatedAt: "2026-09-22" }]);
   mocks.get.mockResolvedValue([
     {
       question: "gimme a table with where the pagination happened",
       query: "SELECT pathname, count() FROM scoped_events GROUP BY pathname",
       summary:
-        "[display:none]\nTop result from the preview:\n\n| Path | Visits |\n| --- | ---: |\n| /search?page=1 | 1 |\n\nOnly 50 of 162 rows were available.",
+        '<!--rybbit-artifact:{"type":"table","title":"Top pagination","columns":["Path","Visits"],"rows":[["/search?page=1","1"]]}-->\nOnly 50 of 162 rows were available.',
       rows: Array.from({ length: 50 }, (_, index) => ({ pathname: `/search?page=${index + 1}`, visits: index + 1 })),
       rowCount: 162,
     },
@@ -144,4 +144,24 @@ it("renders only the rows the model selected from a truncated preview", async ()
   expect(screen.getAllByRole("row")).toHaveLength(2);
   expect(screen.queryByText("/search?page=50")).toBeNull();
   expect(screen.getByText("Only 50 of 162 rows were available.")).toBeTruthy();
+});
+
+it("renders saved tool results and lets a follow-up choice fill the composer", async () => {
+  mocks.list.mockResolvedValue([{ id: "saved-1", title: "Visits", updatedAt: "2026-09-22" }]);
+  mocks.get.mockResolvedValue([
+    {
+      question: "Which pages?",
+      query: "SELECT count() FROM scoped_events",
+      summary:
+        '<!--rybbit-artifact:{"type":"form","question":"Which period?","options":["Last week","Last month"]}-->\nChoose a period.',
+      rows: [],
+      rowCount: 0,
+    },
+  ]);
+  render(<AnalystPanel organizationId="org-1" siteId={42} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Last week" }));
+  expect((screen.getByRole("textbox", { name: "Ask about your analytics" }) as HTMLTextAreaElement).value).toBe(
+    "Last week"
+  );
+  expect(screen.getByText("Choose a period.")).toBeTruthy();
 });
