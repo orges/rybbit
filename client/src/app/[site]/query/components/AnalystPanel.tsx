@@ -16,7 +16,7 @@ import {
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
 import { getErrorMessage, isAbortError } from "../utils";
-import { chartData, ResultChart } from "./ResultChart";
+import { chartData, chartLabel, ResultChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
 
@@ -335,16 +335,16 @@ export function AnalystPanel({
                         {exchange.result.summary || t("Analyzing…")}
                       </ReactMarkdown>
                     </div>
-                    <ResultChart rows={exchange.result.rows} />
+                    <ResultChart rows={exchange.result.rows} rowCount={exchange.result.rowCount} />
                     {exchange.result.rows.length > 0 &&
                       !(exchange.result.rows.length === 1 && chartData(exchange.result.rows)) && (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
+                          <table className="min-w-max w-full text-left text-xs">
                             <thead>
                               <tr>
                                 {Object.keys(exchange.result.rows[0]).map(key => (
-                                  <th key={key} className="border-b p-2">
-                                    {key}
+                                  <th key={key} className="whitespace-nowrap border-b p-2">
+                                    {key === "pathname" ? t("Path") : chartLabel(key)}
                                   </th>
                                 ))}
                               </tr>
@@ -353,8 +353,12 @@ export function AnalystPanel({
                               {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
                                 <tr key={rowIndex}>
                                   {Object.keys(exchange.result!.rows[0]).map(key => (
-                                    <td key={key} className="border-b p-2">
-                                      {String(row[key] ?? "")}
+                                    <td
+                                      key={key}
+                                      className="max-w-64 truncate border-b p-2"
+                                      title={String(row[key] ?? "")}
+                                    >
+                                      {key === "type" ? chartLabel(String(row[key] ?? "")) : String(row[key] ?? "")}
                                     </td>
                                   ))}
                                 </tr>

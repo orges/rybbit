@@ -39,9 +39,22 @@ export function chartData(
 ): { label: string; metrics: string[]; points: ChartPoint[] } | null {
   if (!rows.length) return null;
   const keys = Object.keys(rows[0]);
-  const numeric = keys.filter(key => rows.every(row => row[key] != null && Number.isFinite(Number(row[key]))));
-  const label = keys.find(key => !numeric.includes(key) && rows.every(row => row[key] != null));
-  if (label && numeric.length && rows.length > 1)
+  const numeric = keys.filter(key =>
+    rows.every(
+      row =>
+        (typeof row[key] === "number" || (typeof row[key] === "string" && row[key].trim() !== "")) &&
+        Number.isFinite(Number(row[key]))
+    )
+  );
+  const dimensions = keys.filter(key => !numeric.includes(key));
+  const label = dimensions[0];
+  if (
+    dimensions.length === 1 &&
+    numeric.length &&
+    rows.length > 1 &&
+    rows.every(row => row[label] != null) &&
+    new Set(rows.map(row => String(row[label]))).size === rows.length
+  )
     return {
       label,
       metrics: numeric,
@@ -59,11 +72,11 @@ export function chartData(
   return null;
 }
 
-export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
+export function ResultChart({ rows, rowCount }: { rows: AnalyzeQueryResponse["rows"]; rowCount?: number }) {
   const t = useExtracted();
   const theme = useNivoTheme();
   const [type, setType] = useState<ChartType>("bar");
-  const data = chartData(rows);
+  const data = rowCount && rowCount > rows.length ? null : chartData(rows);
   if (!data) return null;
   const { label, metrics, points } = data;
   const values = points.map(point => Number(point[metrics[0]]));

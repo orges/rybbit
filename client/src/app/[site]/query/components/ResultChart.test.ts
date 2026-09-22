@@ -34,6 +34,21 @@ it("charts multiple numeric series against a date", () => {
   });
 });
 
+it("does not chart multi-dimensional or duplicate-label breakdowns", () => {
+  expect(
+    chartData([
+      { type: "pageview", event_name: "", pathname: "/search", events: 12 },
+      { type: "pageview", event_name: "", pathname: "/home", events: 8 },
+    ])
+  ).toBeNull();
+  expect(
+    chartData([
+      { type: "pageview", events: 12 },
+      { type: "pageview", events: 8 },
+    ])
+  ).toBeNull();
+});
+
 it("pivots one-row comparisons into a table by metric and period", () => {
   const data = chartData([
     {
