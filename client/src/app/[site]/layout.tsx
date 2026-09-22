@@ -20,6 +20,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { setSiteContext, site, privateKey } = useStore();
   const { embed, hideSidebar } = useEmbedPageOptions();
+  const isAnalyst = getSiteRouteContext(pathname).route === "analyst";
 
   // Sync store state with URL parameters
   useSyncStateWithUrl();
@@ -45,9 +46,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
 
   if (width && width < 768) {
     return (
-      <div>
+      <div className={isAnalyst ? "flex h-dvh flex-col" : undefined}>
         <Header />
-        <div>{children}</div>
+        <div className={isAnalyst ? "min-h-0 flex-1" : undefined}>{children}</div>
       </div>
     );
   }
@@ -62,10 +63,10 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
           </div>
         )}
         <div className="flex-1 overflow-auto">
-          <div className="min-h-full flex flex-col">
+          <div className={isAnalyst ? "flex h-full min-h-0 flex-col" : "min-h-full flex flex-col"}>
             {/* <div className="px-4 py-2 max-w-[1400px] mx-auto w-full mb-4"> */}
             <Header />
-            <div className="flex-1">{children}</div>
+            <div className={isAnalyst ? "min-h-0 flex-1" : "flex-1"}>{children}</div>
             {!pathname.includes("/map") &&
               !pathname.includes("/realtime") &&
               !pathname.includes("/replay") &&

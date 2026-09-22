@@ -332,6 +332,12 @@ export function AnalystPanel({
           placeholder={t("Ask about your analytics")}
           value={question}
           onChange={event => setQuestion(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           maxLength={4000}
           disabled={!organizationId || busy || loadingHistory}
         />

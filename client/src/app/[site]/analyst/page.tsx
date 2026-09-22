@@ -12,7 +12,7 @@ export default function AnalystPage() {
   const { data } = useGetSite(siteId);
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-96px)] max-w-[1400px] flex-col p-2 md:p-4">
+    <div className="mx-auto flex h-full min-h-0 max-w-[1400px] flex-col p-2 md:p-4">
       <AnalystPanel siteId={siteId} organizationId={data?.organizationId ?? undefined} />
     </div>
   );

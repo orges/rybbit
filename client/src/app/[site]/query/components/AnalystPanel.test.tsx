@@ -1,13 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), remove: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), remove: vi.fn(), generate: vi.fn(), analyze: vi.fn() }));
 vi.mock("next-intl", () => ({ useExtracted: () => (value: string) => value }));
 vi.mock("../../../../api/analytics/endpoints/customQuery", () => ({
   listAiConversations: mocks.list,
   getAiConversation: mocks.get,
-  generateCustomQuery: vi.fn(),
-  analyzeQuery: vi.fn(),
+  generateCustomQuery: mocks.generate,
+  analyzeQuery: mocks.analyze,
   deleteAiConversation: mocks.remove,
 }));
 
@@ -16,6 +16,24 @@ import { AnalystPanel } from "./AnalystPanel";
 afterEach(() => {
   document.body.innerHTML = "";
   vi.clearAllMocks();
+});
+
+it("sends with Enter and keeps Shift+Enter for a newline", async () => {
+  mocks.list.mockResolvedValue([]);
+  mocks.generate.mockResolvedValue({ query: "SELECT count() FROM scoped_events" });
+  mocks.analyze.mockResolvedValue({
+    query: "SELECT count() FROM scoped_events",
+    summary: "Done",
+    rows: [],
+    rowCount: 0,
+  });
+  render(<AnalystPanel organizationId="org-1" siteId={42} />);
+  const input = await screen.findByRole("textbox", { name: "Ask about your analytics" });
+  fireEvent.change(input, { target: { value: "How many visits?" } });
+  fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+  expect(mocks.generate).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(mocks.generate).toHaveBeenCalledOnce();
 });
 
 it("restores a saved conversation and can start a new one without deleting the old thread", async () => {

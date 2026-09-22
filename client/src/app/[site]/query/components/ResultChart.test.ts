@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { chartData } from "./ResultChart";
+import { chartData, chartLabel } from "./ResultChart";
+
+it("makes comparison column names readable", () => {
+  expect(chartLabel("sessions_3_days_ago")).toBe("Sessions 3 days ago");
+  expect(chartLabel("pageviews_4_days_ago")).toBe("Pageviews 4 days ago");
+});
 
 it("charts a single overview row as metrics", () => {
   expect(chartData([{ sessions: 5242, pageviews: 44676, events: 175045 }])).toEqual({

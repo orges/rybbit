@@ -11,7 +11,14 @@ const colors = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981", "#f43f5e", "#a855f7"
 type ChartType = "bar" | "line" | "donut";
 type ChartPoint = { label: string; [metric: string]: string | number };
 
-export function chartData(rows: AnalyzeQueryResponse["rows"]): { label: string; metrics: string[]; points: ChartPoint[] } | null {
+export function chartLabel(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function chartData(
+  rows: AnalyzeQueryResponse["rows"]
+): { label: string; metrics: string[]; points: ChartPoint[] } | null {
   if (!rows.length) return null;
   const keys = Object.keys(rows[0]);
   const numeric = keys.filter(key => rows.every(row => row[key] != null && Number.isFinite(Number(row[key]))));
@@ -20,12 +27,10 @@ export function chartData(rows: AnalyzeQueryResponse["rows"]): { label: string; 
     return {
       label,
       metrics: numeric,
-      points: rows
-        .slice(0, 50)
-        .map(row => ({
-          label: String(row[label]),
-          ...Object.fromEntries(numeric.map(key => [key, Number(row[key])])),
-        })),
+      points: rows.slice(0, 50).map(row => ({
+        label: String(row[label]),
+        ...Object.fromEntries(numeric.map(key => [key, Number(row[key])])),
+      })),
     };
   if (rows.length === 1 && numeric.length > 1)
     return {
@@ -44,9 +49,13 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
   if (!data) return null;
   const { label, metrics, points } = data;
   const values = points.map(point => Number(point[metrics[0]]));
+  const maxValue = Math.max(0, ...values);
   const total = values.reduce((sum, value) => sum + value, 0);
-  const canUseDonut = metrics.length === 1 && points.length <= 12 && values.every(value => value >= 0) && total > 0;
-  const selected = type === "donut" && !canUseDonut ? "bar" : type;
+  const isOverview = rows.length === 1;
+  const canUseLine = !isOverview;
+  const canUseDonut =
+    !isOverview && metrics.length === 1 && points.length <= 12 && values.every(value => value >= 0) && total > 0;
+  const selected = (type === "donut" && !canUseDonut) || (type === "line" && !canUseLine) ? "bar" : type;
   let offset = 0;
   const stops = points.map((point, index) => {
     const start = offset;
@@ -58,9 +67,9 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
     <div className="rounded-lg border border-neutral-150 p-3 dark:border-neutral-850">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <span className="mr-auto font-medium">
-          {metrics.join(", ")} / {label}
+          {isOverview ? t("Metrics") : `${metrics.map(chartLabel).join(", ")} / ${chartLabel(label)}`}
         </span>
-        {(["bar", "line", ...(canUseDonut ? ["donut"] : [])] as ChartType[]).map(view => (
+        {(["bar", ...(canUseLine ? ["line"] : []), ...(canUseDonut ? ["donut"] : [])] as ChartType[]).map(view => (
           <button
             key={view}
             type="button"
@@ -87,12 +96,31 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
             {points.map((point, index) => (
               <li key={index} className="flex items-center gap-2">
                 <span className="size-2 rounded-full" style={{ background: colors[index % colors.length] }} />
-                <span className="max-w-40 truncate">{point.label}</span>
+                <span className="max-w-40 truncate" title={point.label}>
+                  {chartLabel(point.label)}
+                </span>
                 <span className="ml-auto tabular-nums">{values[index].toLocaleString()}</span>
               </li>
             ))}
           </ul>
         </div>
+      ) : isOverview ? (
+        <ol className="space-y-3 py-2 text-xs">
+          {points.map((point, index) => (
+            <li key={point.label} className="grid grid-cols-[minmax(0,12rem)_minmax(2rem,1fr)_auto] items-center gap-3">
+              <span className="truncate" title={point.label}>
+                {chartLabel(point.label)}
+              </span>
+              <span className="h-4 rounded-sm bg-neutral-100 dark:bg-neutral-800">
+                <span
+                  className="block h-full rounded-sm bg-indigo-500"
+                  style={{ width: `${maxValue ? Math.max(0, (values[index] / maxValue) * 100) : 0}%` }}
+                />
+              </span>
+              <span className="tabular-nums">{values[index].toLocaleString()}</span>
+            </li>
+          ))}
+        </ol>
       ) : (
         <div
           className="h-80"
