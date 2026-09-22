@@ -122,6 +122,7 @@ The only readable table is scoped_events. Never read from events or any other ta
 Never define or shadow scoped_events.
 Use ClickHouse syntax.
 Use LIMIT 1000 or smaller for detail/list queries.
+For ranked lists and tables, select only the relevant dimensions and metrics, ORDER BY the requested metric descending, then LIMIT the result. Do not return arbitrary pathname-ordered rows when the user asks for top activity.
 For custom event properties, use JSONExtractString(toString(props), 'property_name').
 Use the previous messages and current editor query as context.
 If the user asks an incremental follow-up, revise the current editor query.

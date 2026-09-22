@@ -17,18 +17,9 @@ import {
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
 import { getErrorMessage, isAbortError } from "../utils";
-import { chartData, chartLabel, ResultChart } from "./ResultChart";
+import { ResultChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
-
-function exchangeDisplay(exchange: Exchange) {
-  if (
-    exchange.result?.rows.length &&
-    /\b(?:give|gimme|show|make|create|want|need)\b.{0,30}\btable\b/i.test(exchange.question)
-  )
-    return "table";
-  return parseAnalysisSummary(exchange.result?.summary ?? "").display;
-}
 
 export function AnalystPanel({
   organizationId,
@@ -327,92 +318,52 @@ export function AnalystPanel({
                 )}
                 {exchange.result && (
                   <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
-                    {(exchangeDisplay(exchange) !== "table" || exchange.result.rows.length === 0) && (
-                      <div className="space-y-3 leading-relaxed break-words">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            p: ({ children }) => <p>{children}</p>,
-                            ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
-                            h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
-                            h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
-                            a: ({ children, href }) => (
-                              <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
-                                {children}
-                              </a>
-                            ),
-                            code: ({ children }) => (
-                              <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
-                                {children}
-                              </code>
-                            ),
-                            pre: ({ children }) => (
-                              <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
-                                {children}
-                              </pre>
-                            ),
-                            table: ({ children }) => (
-                              <div className="overflow-x-auto">
-                                <table className="w-full border-collapse text-xs">{children}</table>
-                              </div>
-                            ),
-                            th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
-                            td: ({ children }) => <td className="border p-2">{children}</td>,
-                          }}
-                        >
-                          {parseAnalysisSummary(exchange.result.summary).text || t("Analyzing…")}
-                        </ReactMarkdown>
-                      </div>
-                    )}
+                    <div className="space-y-3 leading-relaxed break-words">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p>{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+                          h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
+                          h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
+                          a: ({ children, href }) => (
+                            <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
+                              {children}
+                            </a>
+                          ),
+                          code: ({ children }) => (
+                            <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
+                              {children}
+                            </code>
+                          ),
+                          pre: ({ children }) => (
+                            <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+                              {children}
+                            </pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse text-xs">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
+                          td: ({ children }) => <td className="border p-2">{children}</td>,
+                        }}
+                      >
+                        {parseAnalysisSummary(exchange.result.summary).text || t("Analyzing…")}
+                      </ReactMarkdown>
+                    </div>
                     <ResultChart
                       rows={exchange.result.rows}
                       rowCount={exchange.result.rowCount}
-                      display={exchangeDisplay(exchange)}
+                      display={
+                        parseAnalysisSummary(exchange.result.summary).display === "table"
+                          ? "none"
+                          : parseAnalysisSummary(exchange.result.summary).display
+                      }
                     />
-                    {exchange.result.rows.length > 0 &&
-                      exchangeDisplay(exchange) === "table" &&
-                      !(
-                        exchange.result.rows.length === 1 &&
-                        exchange.result.rowCount <= 1 &&
-                        chartData(exchange.result.rows)
-                      ) && (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-max w-full text-left text-xs">
-                            <thead>
-                              <tr>
-                                {Object.keys(exchange.result.rows[0]).map(key => (
-                                  <th key={key} className="whitespace-nowrap border-b p-2">
-                                    {key === "pathname" ? t("Path") : chartLabel(key)}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {exchange.result.rows.map((row, rowIndex) => (
-                                <tr key={rowIndex}>
-                                  {Object.keys(exchange.result!.rows[0]).map(key => (
-                                    <td
-                                      key={key}
-                                      className="max-w-64 truncate border-b p-2"
-                                      title={String(row[key] ?? "")}
-                                    >
-                                      {key === "type" ? chartLabel(String(row[key] ?? "")) : String(row[key] ?? "")}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <p className="mt-2 text-neutral-500 dark:text-neutral-400">
-                            {t("Showing {shown} of {count} rows", {
-                              shown: String(exchange.result.rows.length),
-                              count: String(exchange.result.rowCount),
-                            })}
-                          </p>
-                        </div>
-                      )}
                     <details className="text-xs">
                       <summary className="cursor-pointer">{t("View SQL")}</summary>
                       <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">

@@ -67,7 +67,7 @@ it("restores a saved conversation and can start a new one without deleting the o
   expect(screen.getByRole("option", { name: "Visits?" })).toBeTruthy();
 });
 
-it("shows a chosen table only once and follows incoming messages until the reader scrolls away", async () => {
+it("renders model-authored Markdown and follows incoming messages until the reader scrolls away", async () => {
   mocks.list.mockResolvedValue([{ id: "saved-1", title: "Errors", updatedAt: "2026-09-22" }]);
   let resolveMessages!: (value: unknown[]) => void;
   mocks.get.mockReturnValue(
@@ -84,13 +84,13 @@ it("shows a chosen table only once and follows incoming messages until the reade
     {
       question: "List errors",
       query: "SELECT name, count() FROM scoped_events GROUP BY name",
-      summary: "[display:table]\nErrors: **Load failed** (22 occurrences)",
+      summary: "[display:none]\n| Error | Occurrences |\n| --- | ---: |\n| Load failed | 22 |",
       rows: [{ name: "Load failed", occurrences: 22 }],
       rowCount: 1,
     },
   ]);
   expect(await screen.findByRole("cell", { name: "Load failed" })).toBeTruthy();
-  expect(screen.queryByText(/Errors: /)).toBeNull();
+  expect(screen.getAllByRole("cell", { name: "Load failed" })).toHaveLength(1);
   await waitFor(() => expect(pane.scrollTop).toBe(600));
 
   mocks.generate.mockResolvedValue({ query: "SELECT count() FROM scoped_events" });
@@ -127,19 +127,21 @@ it("shows a chosen table only once and follows incoming messages until the reade
   });
 });
 
-it("shows available rows for an explicit table request even if the model chose prose", async () => {
+it("renders only the rows the model selected from a truncated preview", async () => {
   mocks.list.mockResolvedValue([{ id: "saved-1", title: "Pagination", updatedAt: "2026-09-22" }]);
   mocks.get.mockResolvedValue([
     {
       question: "gimme a table with where the pagination happened",
       query: "SELECT pathname, count() FROM scoped_events GROUP BY pathname",
-      summary: "[display:none]\nResults are truncated; no table can be shown.",
+      summary:
+        "[display:none]\nTop result from the preview:\n\n| Path | Visits |\n| --- | ---: |\n| /search?page=1 | 1 |\n\nOnly 50 of 162 rows were available.",
       rows: Array.from({ length: 50 }, (_, index) => ({ pathname: `/search?page=${index + 1}`, visits: index + 1 })),
       rowCount: 162,
     },
   ]);
   render(<AnalystPanel organizationId="org-1" siteId={42} />);
-  expect(await screen.findByRole("cell", { name: "/search?page=50" })).toBeTruthy();
-  expect(screen.getByText("Showing 50 of 162 rows")).toBeTruthy();
-  expect(screen.queryByText(/no table can be shown/)).toBeNull();
+  expect(await screen.findByRole("cell", { name: "/search?page=1" })).toBeTruthy();
+  expect(screen.getAllByRole("row")).toHaveLength(2);
+  expect(screen.queryByText("/search?page=50")).toBeNull();
+  expect(screen.getByText("Only 50 of 162 rows were available.")).toBeTruthy();
 });
