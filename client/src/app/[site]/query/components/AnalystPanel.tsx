@@ -21,6 +21,15 @@ import { chartData, chartLabel, ResultChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
 
+function exchangeDisplay(exchange: Exchange) {
+  if (
+    exchange.result?.rows.length &&
+    /\b(?:give|gimme|show|make|create|want|need)\b.{0,30}\btable\b/i.test(exchange.question)
+  )
+    return "table";
+  return parseAnalysisSummary(exchange.result?.summary ?? "").display;
+}
+
 export function AnalystPanel({
   organizationId,
   siteId,
@@ -318,8 +327,7 @@ export function AnalystPanel({
                 )}
                 {exchange.result && (
                   <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
-                    {(parseAnalysisSummary(exchange.result.summary).display !== "table" ||
-                      exchange.result.rows.length === 0) && (
+                    {(exchangeDisplay(exchange) !== "table" || exchange.result.rows.length === 0) && (
                       <div className="space-y-3 leading-relaxed break-words">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -361,10 +369,10 @@ export function AnalystPanel({
                     <ResultChart
                       rows={exchange.result.rows}
                       rowCount={exchange.result.rowCount}
-                      display={parseAnalysisSummary(exchange.result.summary).display}
+                      display={exchangeDisplay(exchange)}
                     />
                     {exchange.result.rows.length > 0 &&
-                      parseAnalysisSummary(exchange.result.summary).display === "table" &&
+                      exchangeDisplay(exchange) === "table" &&
                       !(
                         exchange.result.rows.length === 1 &&
                         exchange.result.rowCount <= 1 &&
@@ -382,7 +390,7 @@ export function AnalystPanel({
                               </tr>
                             </thead>
                             <tbody>
-                              {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
+                              {exchange.result.rows.map((row, rowIndex) => (
                                 <tr key={rowIndex}>
                                   {Object.keys(exchange.result!.rows[0]).map(key => (
                                     <td
@@ -399,7 +407,7 @@ export function AnalystPanel({
                           </table>
                           <p className="mt-2 text-neutral-500 dark:text-neutral-400">
                             {t("Showing {shown} of {count} rows", {
-                              shown: String(Math.min(10, exchange.result.rows.length)),
+                              shown: String(exchange.result.rows.length),
                               count: String(exchange.result.rowCount),
                             })}
                           </p>

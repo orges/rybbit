@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), remove: vi.fn(), generate: vi.fn(), analyze: vi.fn() }));
-vi.mock("next-intl", () => ({ useExtracted: () => (value: string) => value }));
+vi.mock("next-intl", () => ({
+  useExtracted: () => (value: string, params?: Record<string, string>) =>
+    value.replace(/\{(\w+)\}/g, (_, key: string) => params?.[key] ?? `{${key}}`),
+}));
 vi.mock("../../../../api/analytics/endpoints/customQuery", async importOriginal => ({
   ...(await importOriginal<typeof import("../../../../api/analytics/endpoints/customQuery")>()),
   listAiConversations: mocks.list,
@@ -122,4 +125,21 @@ it("shows a chosen table only once and follows incoming messages until the reade
     rows: [],
     rowCount: 0,
   });
+});
+
+it("shows available rows for an explicit table request even if the model chose prose", async () => {
+  mocks.list.mockResolvedValue([{ id: "saved-1", title: "Pagination", updatedAt: "2026-09-22" }]);
+  mocks.get.mockResolvedValue([
+    {
+      question: "gimme a table with where the pagination happened",
+      query: "SELECT pathname, count() FROM scoped_events GROUP BY pathname",
+      summary: "[display:none]\nResults are truncated; no table can be shown.",
+      rows: Array.from({ length: 50 }, (_, index) => ({ pathname: `/search?page=${index + 1}`, visits: index + 1 })),
+      rowCount: 162,
+    },
+  ]);
+  render(<AnalystPanel organizationId="org-1" siteId={42} />);
+  expect(await screen.findByRole("cell", { name: "/search?page=50" })).toBeTruthy();
+  expect(screen.getByText("Showing 50 of 162 rows")).toBeTruthy();
+  expect(screen.queryByText(/no table can be shown/)).toBeNull();
 });
