@@ -24,6 +24,7 @@ export type CustomQueryGenerationMessage = {
 export type GenerateCustomQueryRequest = {
   prompt: string;
   currentSiteId?: number;
+  currentPage?: string;
   currentQuery?: string;
   history?: CustomQueryGenerationMessage[];
 };

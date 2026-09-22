@@ -47,7 +47,15 @@ function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
   );
 }
 
-export function AnalystPanel({ organizationId, siteId }: { organizationId?: string; siteId: number }) {
+export function AnalystPanel({
+  organizationId,
+  siteId,
+  currentPage,
+}: {
+  organizationId?: string;
+  siteId: number;
+  currentPage?: string;
+}) {
   const t = useExtracted();
   const [question, setQuestion] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -84,6 +92,7 @@ export function AnalystPanel({ organizationId, siteId }: { organizationId?: stri
         {
           prompt,
           currentSiteId: siteId,
+          currentPage,
           history,
           currentQuery: exchanges.at(-1)?.result?.query,
         },

@@ -7,6 +7,7 @@ import { getMainDashboardPath, getSiteRouteContext } from "../../lib/siteRoute";
 import { useStore } from "../../lib/store";
 import { useSyncStateWithUrl } from "../../lib/urlParams";
 import { Footer } from "../components/Footer";
+import { AnalystDrawer } from "./components/AnalystDrawer";
 import { Header } from "./components/Header/Header";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { useEmbedPageOptions } from "./utils";
@@ -48,6 +49,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <div>
         <Header />
         <div>{children}</div>
+        <AnalystDrawer embed={embed} />
       </div>
     );
   }
@@ -74,6 +76,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               !pathname.includes("/query") && <Footer disabled={embed} />}
           </div>
         </div>
+        <AnalystDrawer embed={embed} />
       </div>
     </div>
   );

@@ -16,6 +16,27 @@ const generationMessageSchema = z.object({
 const requestBodySchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
   currentSiteId: z.number().int().positive().optional(),
+  currentPage: z
+    .enum([
+      "main",
+      "events",
+      "errors",
+      "funnels",
+      "journeys",
+      "retention",
+      "pages",
+      "performance",
+      "replay",
+      "users",
+      "sessions",
+      "goals",
+      "bots",
+      "dashboards",
+      "query",
+      "experiments",
+      "feature-flags",
+    ])
+    .optional(),
   currentQuery: z.string().trim().max(MAX_CUSTOM_QUERY_LENGTH).optional(),
   history: z.array(generationMessageSchema).max(12).optional().default([]),
 });
@@ -107,6 +128,7 @@ If the user asks an incremental follow-up, revise the current editor query.
 If the user clearly asks for a new query, a different analysis, or to start over, generate a fresh query.
 If the current editor query is empty, generate a fresh query.
 ${currentSiteInstruction}
+${body.data.currentPage ? `The user is viewing the ${body.data.currentPage} analytics page. Interpret references to "here" or "this page" in that context.` : ""}
 ${EVENT_SCHEMA}
 
 Good examples:

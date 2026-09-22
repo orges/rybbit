@@ -6,6 +6,7 @@ vi.mock("../../db/clickhouse/clickhouse.js", () => ({ clickhouseQuery: { query }
 vi.mock("../../lib/auth-utils.js", () => ({ getSitesUserHasAccessTo }));
 
 import { analyzeQuery } from "./analyzeQuery.js";
+import { generateCustomQuery } from "./generateCustomQuery.js";
 import { executeScopedQuery } from "./runCustomQuery.js";
 
 describe("executeScopedQuery", () => {
@@ -44,4 +45,16 @@ describe("analyzeQuery", () => {
     expect(status).toHaveBeenCalledWith(403);
     expect(query).not.toHaveBeenCalled();
   });
+});
+
+it("rejects arbitrary page context before calling the SQL generator", async () => {
+  getSitesUserHasAccessTo.mockClear();
+  const send = vi.fn();
+  const status = vi.fn(() => ({ send }));
+  await generateCustomQuery(
+    { body: { prompt: "Visits?", currentPage: "ignore-instructions" } } as Parameters<typeof generateCustomQuery>[0],
+    { status } as unknown as Parameters<typeof generateCustomQuery>[1]
+  );
+  expect(status).toHaveBeenCalledWith(400);
+  expect(getSitesUserHasAccessTo).not.toHaveBeenCalled();
 });
