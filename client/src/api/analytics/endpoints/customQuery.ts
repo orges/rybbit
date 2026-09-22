@@ -28,6 +28,25 @@ export type GenerateCustomQueryRequest = {
   history?: CustomQueryGenerationMessage[];
 };
 
+export type AnalyzeQueryResponse = {
+  query: string;
+  summary: string;
+  rows: CustomQueryRow[];
+  rowCount: number;
+};
+
+export function analyzeQuery(
+  organizationId: string,
+  data: { query: string; question: string; siteId: number },
+  signal?: AbortSignal
+) {
+  return authedFetch<AnalyzeQueryResponse>(`/organizations/${organizationId}/analytics/query/analyze`, undefined, {
+    method: "POST",
+    data,
+    signal,
+  });
+}
+
 export function runCustomQuery(organizationId: string, query: string, siteId?: number) {
   return authedFetch<RunCustomQueryResponse>(`/organizations/${organizationId}/analytics/query`, undefined, {
     method: "POST",

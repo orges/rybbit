@@ -20,6 +20,20 @@ const requestBodySchema = z.object({
   siteId: z.number().int().positive().optional(),
 });
 
+export async function executeScopedQuery(query: string, siteIds: number[]) {
+  const validationError = validateScopedQuery(query);
+  if (validationError) throw new Error(validationError);
+
+  const result = await clickhouseQuery.query({
+    query: `WITH scoped_events AS (
+      SELECT * FROM events PREWHERE site_id IN {siteIds:Array(UInt16)}
+    ) SELECT * FROM (${normalizeCustomQuery(query)}) LIMIT {limit:UInt32}`,
+    format: "JSONEachRow",
+    query_params: { siteIds, limit: MAX_RESULT_ROWS },
+  });
+  return { data: await result.json<Record<string, unknown>>(), queryId: result.query_id };
+}
+
 export async function runCustomQuery(
   request: FastifyRequest<{
     Params: {
@@ -56,37 +70,12 @@ export async function runCustomQuery(
     siteIds = [body.data.siteId];
   }
 
-  const query = `
-    WITH scoped_events AS (
-      SELECT *
-      FROM events
-      PREWHERE site_id IN {siteIds:Array(UInt16)}
-    )
-    SELECT *
-    FROM (
-      ${normalizeCustomQuery(body.data.query)}
-    )
-    LIMIT {limit:UInt32}
-  `;
-
   try {
-    const result = await clickhouseQuery.query({
-      query,
-      format: "JSONEachRow",
-      query_params: {
-        siteIds,
-        limit: MAX_RESULT_ROWS,
-      },
-      // Execution limits (readonly, max_execution_time, max_memory_usage,
-      // max_result_rows, …) come from the rybbit_query settings profile and are
-      // pinned there with constraints; sending them here would be rejected.
-    });
-
-    const data = await result.json<Record<string, unknown>>();
+    const { data, queryId } = await executeScopedQuery(body.data.query, siteIds);
     return reply.send({
       data,
       meta: {
-        queryId: result.query_id,
+        queryId,
         rowCount: data.length,
         maxExecutionTimeSeconds: MAX_EXECUTION_TIME_SECONDS,
         maxRows: MAX_RESULT_ROWS,

@@ -22,6 +22,7 @@ import {
   updateAdminSubscriptionOverride,
 } from "./api/admin/index.js";
 import {
+  analyzeQuery,
   createAnnotation,
   createDashboard,
   createSegment,
@@ -510,6 +511,11 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     "/organizations/:organizationId/analytics/query/generate",
     withRateLimit(orgSqlRead, generateQueryRateLimit),
     generateCustomQuery
+  );
+  fastify.post(
+    "/organizations/:organizationId/analytics/query/analyze",
+    withRateLimit(orgSqlRead, generateQueryRateLimit),
+    analyzeQuery
   );
   fastify.get("/sites/:siteId/performance/overview", publicAnalyticsRead, getPerformanceOverview);
   fastify.get("/sites/:siteId/performance/time-series", publicAnalyticsRead, getPerformanceTimeSeries);

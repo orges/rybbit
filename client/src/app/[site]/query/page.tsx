@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useGetSite } from "../../../api/admin/hooks/useSites";
 import { useGenerateCustomQuery, useRunCustomQuery } from "../../../api/analytics/hooks/useCustomQuery";
 import { useSetPageTitle } from "../../../hooks/useSetPageTitle";
+import { AnalystPanel } from "./components/AnalystPanel";
 import { QueryEditor } from "./components/QueryEditor";
 import { QueryPromptForm } from "./components/QueryPromptForm";
 import { QueryTabs } from "./components/QueryTabs";
@@ -23,6 +24,7 @@ export default function QueryPage() {
   const organizationId = siteMetadata?.organizationId;
 
   const [tabs, setTabs] = useState<QueryTab[]>(() => [createQueryTab(1)]);
+  const [showAnalyst, setShowAnalyst] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0]?.id);
   const [runningTabIds, setRunningTabIds] = useState<Set<string>>(() => new Set());
   const [generatingTabIds, setGeneratingTabIds] = useState<Set<string>>(() => new Set());
@@ -185,42 +187,67 @@ export default function QueryPage() {
 
   return (
     <div className="p-2 md:p-4 mx-auto max-w-[1400px] h-[calc(100vh-96px)] flex flex-col gap-3">
-      <QueryTabs
-        tabs={tabs}
-        activeTabId={activeTab?.id}
-        runningTabIds={runningTabIds}
-        generatingTabIds={generatingTabIds}
-        onSelectTab={setActiveTabId}
-        onCloseTab={closeTab}
-        onAddTab={addTab}
-      />
+      <div className="flex gap-2 text-sm" role="group" aria-label={t("Query mode")}>
+        <button
+          type="button"
+          onClick={() => setShowAnalyst(false)}
+          aria-pressed={!showAnalyst}
+          className={`rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 ${!showAnalyst ? "bg-neutral-200 dark:bg-neutral-800" : "hover:bg-neutral-100 dark:hover:bg-neutral-850"}`}
+        >
+          {t("SQL editor")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAnalyst(true)}
+          aria-pressed={showAnalyst}
+          className={`rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 ${showAnalyst ? "bg-neutral-200 dark:bg-neutral-800" : "hover:bg-neutral-100 dark:hover:bg-neutral-850"}`}
+        >
+          {t("AI analyst")}
+        </button>
+      </div>
+      <div className={showAnalyst ? "flex min-h-0 flex-1" : "hidden"}>
+        <AnalystPanel organizationId={organizationId ?? undefined} siteId={siteId} />
+      </div>
+      {!showAnalyst && (
+        <>
+          <QueryTabs
+            tabs={tabs}
+            activeTabId={activeTab?.id}
+            runningTabIds={runningTabIds}
+            generatingTabIds={generatingTabIds}
+            onSelectTab={setActiveTabId}
+            onCloseTab={closeTab}
+            onAddTab={addTab}
+          />
 
-      <QueryPromptForm
-        prompt={activeTab?.prompt ?? ""}
-        canUseQuery={canUseQuery}
-        isBusy={activeTabIsBusy}
-        isGenerating={activeTabIsGenerating}
-        onPromptChange={prompt => updateActiveTab({ prompt })}
-        onGenerate={handleGenerate}
-        onCancelGenerate={abortActiveGeneration}
-      />
+          <QueryPromptForm
+            prompt={activeTab?.prompt ?? ""}
+            canUseQuery={canUseQuery}
+            isBusy={activeTabIsBusy}
+            isGenerating={activeTabIsGenerating}
+            onPromptChange={prompt => updateActiveTab({ prompt })}
+            onGenerate={handleGenerate}
+            onCancelGenerate={abortActiveGeneration}
+          />
 
-      <QueryEditor
-        value={activeTab?.query ?? ""}
-        disabled={!canUseQuery || activeTabIsBusy}
-        isRunning={activeTabIsRunning}
-        onChange={query => updateActiveTab({ query })}
-        onFormat={() => updateActiveTab({ query: formatQuery(activeTab?.query ?? "") })}
-        onRun={handleRun}
-      />
+          <QueryEditor
+            value={activeTab?.query ?? ""}
+            disabled={!canUseQuery || activeTabIsBusy}
+            isRunning={activeTabIsRunning}
+            onChange={query => updateActiveTab({ query })}
+            onFormat={() => updateActiveTab({ query: formatQuery(activeTab?.query ?? "") })}
+            onRun={handleRun}
+          />
 
-      <ResultsPanel
-        activeTab={activeTab}
-        columns={columns}
-        rows={sortedRows}
-        sort={activeSort}
-        onSortChange={sort => updateActiveTab({ sort })}
-      />
+          <ResultsPanel
+            activeTab={activeTab}
+            columns={columns}
+            rows={sortedRows}
+            sort={activeSort}
+            onSortChange={sort => updateActiveTab({ sort })}
+          />
+        </>
+      )}
     </div>
   );
 }
