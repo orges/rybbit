@@ -39,6 +39,13 @@ export type AnalyzeQueryResponse = {
 };
 
 export type AiConversation = { id: string; title: string; updatedAt: string };
+export type AnalysisDisplay = "none" | "table" | "bar" | "line" | "donut";
+
+export function parseAnalysisSummary(summary: string): { display: AnalysisDisplay; text: string } {
+  const prefix = /^\[display:(none|table|bar|line|donut)\]\r?\n/i.exec(summary);
+  if (prefix) return { display: prefix[1].toLowerCase() as AnalysisDisplay, text: summary.slice(prefix[0].length) };
+  return { display: "none", text: summary.startsWith("[display:") && !summary.includes("\n") ? "" : summary };
+}
 export type SavedAiExchange = {
   question: string;
   query: string;

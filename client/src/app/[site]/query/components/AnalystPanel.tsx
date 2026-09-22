@@ -11,6 +11,7 @@ import {
   generateCustomQuery,
   getAiConversation,
   listAiConversations,
+  parseAnalysisSummary,
   type AiConversation,
   type AnalyzeQueryResponse,
 } from "../../../../api/analytics/endpoints/customQuery";
@@ -332,12 +333,21 @@ export function AnalystPanel({
                           td: ({ children }) => <td className="border p-2">{children}</td>,
                         }}
                       >
-                        {exchange.result.summary || t("Analyzing…")}
+                        {parseAnalysisSummary(exchange.result.summary).text || t("Analyzing…")}
                       </ReactMarkdown>
                     </div>
-                    <ResultChart rows={exchange.result.rows} rowCount={exchange.result.rowCount} />
+                    <ResultChart
+                      rows={exchange.result.rows}
+                      rowCount={exchange.result.rowCount}
+                      display={parseAnalysisSummary(exchange.result.summary).display}
+                    />
                     {exchange.result.rows.length > 0 &&
-                      !(exchange.result.rows.length === 1 && chartData(exchange.result.rows)) && (
+                      parseAnalysisSummary(exchange.result.summary).display === "table" &&
+                      !(
+                        exchange.result.rows.length === 1 &&
+                        exchange.result.rowCount <= 1 &&
+                        chartData(exchange.result.rows)
+                      ) && (
                         <div className="overflow-x-auto">
                           <table className="min-w-max w-full text-left text-xs">
                             <thead>

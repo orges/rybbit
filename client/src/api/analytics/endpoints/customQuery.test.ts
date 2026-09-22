@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { analyzeQuery } from "./customQuery";
+import { analyzeQuery, parseAnalysisSummary } from "./customQuery";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -42,4 +42,13 @@ it("rejects an interrupted stream instead of presenting a partial answer", async
   await expect(
     analyzeQuery("org-1", { query: "SELECT 1", question: "Why?", siteId: 42 }, new AbortController().signal, vi.fn())
   ).rejects.toThrow("ended before");
+});
+
+it("keeps presentation choices out of streamed and saved answers", () => {
+  expect(parseAnalysisSummary("[display:table]\n**Four visits**")).toEqual({
+    display: "table",
+    text: "**Four visits**",
+  });
+  expect(parseAnalysisSummary("[display:ta")).toEqual({ display: "none", text: "" });
+  expect(parseAnalysisSummary("Legacy answer")).toEqual({ display: "none", text: "Legacy answer" });
 });

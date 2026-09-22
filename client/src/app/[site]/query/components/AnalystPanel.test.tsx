@@ -3,7 +3,8 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), remove: vi.fn(), generate: vi.fn(), analyze: vi.fn() }));
 vi.mock("next-intl", () => ({ useExtracted: () => (value: string) => value }));
-vi.mock("../../../../api/analytics/endpoints/customQuery", () => ({
+vi.mock("../../../../api/analytics/endpoints/customQuery", async importOriginal => ({
+  ...(await importOriginal<typeof import("../../../../api/analytics/endpoints/customQuery")>()),
   listAiConversations: mocks.list,
   getAiConversation: mocks.get,
   generateCustomQuery: mocks.generate,
@@ -42,7 +43,7 @@ it("restores a saved conversation and can start a new one without deleting the o
     {
       question: "Visits?",
       query: "SELECT count() FROM scoped_events",
-      summary: "Saved **answer**",
+      summary: "[display:table]\nSaved **answer**",
       rows: [{ visits: 4 }],
       rowCount: 1,
     },

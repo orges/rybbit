@@ -4,7 +4,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
 import { useExtracted } from "next-intl";
 import { useState } from "react";
-import type { AnalyzeQueryResponse } from "../../../../api/analytics/endpoints/customQuery";
+import type { AnalysisDisplay, AnalyzeQueryResponse } from "../../../../api/analytics/endpoints/customQuery";
 import { useNivoTheme } from "../../../../lib/nivo";
 
 const colors = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981", "#f43f5e", "#a855f7"];
@@ -72,20 +72,37 @@ export function chartData(
   return null;
 }
 
-export function ResultChart({ rows, rowCount }: { rows: AnalyzeQueryResponse["rows"]; rowCount?: number }) {
+export function ResultChart({
+  rows,
+  rowCount,
+  display,
+}: {
+  rows: AnalyzeQueryResponse["rows"];
+  rowCount?: number;
+  display: AnalysisDisplay;
+}) {
   const t = useExtracted();
   const theme = useNivoTheme();
-  const [type, setType] = useState<ChartType>("bar");
+  const [type, setType] = useState<ChartType>(display === "line" || display === "donut" ? display : "bar");
   const data = rowCount && rowCount > rows.length ? null : chartData(rows);
-  if (!data) return null;
+  if (
+    !data ||
+    display === "none" ||
+    (rows.length === 1 && display !== "table") ||
+    (display === "table" && rows.length !== 1)
+  )
+    return null;
   const { label, metrics, points } = data;
   const values = points.map(point => Number(point[metrics[0]]));
   const total = values.reduce((sum, value) => sum + value, 0);
   const isOverview = rows.length === 1;
-  const table = isOverview ? overviewTable(points) : null;
-  const canUseLine = !isOverview;
+  const table = display === "table" && isOverview ? overviewTable(points) : null;
+  const canUseLine =
+    !isOverview &&
+    (/date|day|week|month|time|hour/i.test(label) || points.every(point => /^\d{4}-\d\d/.test(point.label)));
   const canUseDonut =
     !isOverview && metrics.length === 1 && points.length <= 12 && values.every(value => value >= 0) && total > 0;
+  if ((display === "donut" && !canUseDonut) || (display === "line" && !canUseLine)) return null;
   const selected = (type === "donut" && !canUseDonut) || (type === "line" && !canUseLine) ? "bar" : type;
   let offset = 0;
   const stops = points.map((point, index) => {

@@ -60,8 +60,9 @@ describe("analyzeQuery", () => {
   it("streams the scoped result, summary deltas, and completion while preserving CORS headers", async () => {
     getSitesUserHasAccessTo.mockResolvedValue([{ organizationId: "org-1", siteId: 42 }]);
     query.mockResolvedValue({ query_id: "test", json: async () => [{ visits: 4 }] });
-    streamOpenRouter.mockImplementation(async function* () {
-      yield "Four ";
+    streamOpenRouter.mockImplementation(async function* (messages: Array<{ content: string }>) {
+      expect(messages[0].content).toContain("[display:none]");
+      yield "[display:table]\nFour ";
       yield "visits";
     });
     saveAiExchange.mockResolvedValue("e8dfdb2e-8159-4d51-a56d-22404613da4e");
@@ -103,7 +104,7 @@ describe("analyzeQuery", () => {
         userId: "user-1",
         organizationId: "org-1",
         siteId: 42,
-        summary: "Four visits",
+        summary: "[display:table]\nFour visits",
       })
     );
     expect(JSON.parse(lines[lines.length - 1].slice(6)).conversationId).toBe("e8dfdb2e-8159-4d51-a56d-22404613da4e");
