@@ -16,6 +16,24 @@ export function chartLabel(value: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+export function overviewTable(points: ChartPoint[]) {
+  const comparisons = points.map(point => /^(.*?)_(\d+_days?_ago)$/.exec(point.label));
+  if (comparisons.every(Boolean)) {
+    const periods = [...new Set(comparisons.map(match => match![2]))];
+    if (periods.length > 1) {
+      const metrics = [...new Set(comparisons.map(match => match![1]))];
+      return {
+        columns: periods.map(chartLabel),
+        rows: metrics.map(metric => ({
+          label: chartLabel(metric),
+          values: periods.map(period => points.find(point => point.label === `${metric}_${period}`)?.Value ?? null),
+        })),
+      };
+    }
+  }
+  return { columns: ["Value"], rows: points.map(point => ({ label: chartLabel(point.label), values: [point.Value] })) };
+}
+
 export function chartData(
   rows: AnalyzeQueryResponse["rows"]
 ): { label: string; metrics: string[]; points: ChartPoint[] } | null {
@@ -49,9 +67,9 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
   if (!data) return null;
   const { label, metrics, points } = data;
   const values = points.map(point => Number(point[metrics[0]]));
-  const maxValue = Math.max(0, ...values);
   const total = values.reduce((sum, value) => sum + value, 0);
   const isOverview = rows.length === 1;
+  const table = isOverview ? overviewTable(points) : null;
   const canUseLine = !isOverview;
   const canUseDonut =
     !isOverview && metrics.length === 1 && points.length <= 12 && values.every(value => value >= 0) && total > 0;
@@ -69,19 +87,47 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
         <span className="mr-auto font-medium">
           {isOverview ? t("Metrics") : `${metrics.map(chartLabel).join(", ")} / ${chartLabel(label)}`}
         </span>
-        {(["bar", ...(canUseLine ? ["line"] : []), ...(canUseDonut ? ["donut"] : [])] as ChartType[]).map(view => (
-          <button
-            key={view}
-            type="button"
-            aria-pressed={selected === view}
-            className={`rounded px-2 py-1 ${selected === view ? "bg-neutral-200 text-neutral-950 dark:bg-neutral-700 dark:text-white" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
-            onClick={() => setType(view)}
-          >
-            {view === "bar" ? t("Bar") : view === "line" ? t("Line") : t("Donut")}
-          </button>
-        ))}
+        {!isOverview &&
+          (["bar", ...(canUseLine ? ["line"] : []), ...(canUseDonut ? ["donut"] : [])] as ChartType[]).map(view => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={selected === view}
+              className={`rounded px-2 py-1 ${selected === view ? "bg-neutral-200 text-neutral-950 dark:bg-neutral-700 dark:text-white" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              onClick={() => setType(view)}
+            >
+              {view === "bar" ? t("Bar") : view === "line" ? t("Line") : t("Donut")}
+            </button>
+          ))}
       </div>
-      {selected === "donut" ? (
+      {table ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr>
+                <th className="border-b p-2">{t("Metric")}</th>
+                {table.columns.map(column => (
+                  <th key={column} className="border-b p-2 text-right">
+                    {column === "Value" ? t("Value") : column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.map(row => (
+                <tr key={row.label}>
+                  <th className="border-b p-2 font-normal">{row.label}</th>
+                  {row.values.map((value, index) => (
+                    <td key={index} className="border-b p-2 text-right tabular-nums">
+                      {value == null ? "—" : Number(value).toLocaleString()}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : selected === "donut" ? (
         <div className="flex flex-wrap items-center justify-center gap-6 py-4">
           <div
             role="img"
@@ -104,23 +150,6 @@ export function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
             ))}
           </ul>
         </div>
-      ) : isOverview ? (
-        <ol className="space-y-3 py-2 text-xs">
-          {points.map((point, index) => (
-            <li key={point.label} className="grid grid-cols-[minmax(0,12rem)_minmax(2rem,1fr)_auto] items-center gap-3">
-              <span className="truncate" title={point.label}>
-                {chartLabel(point.label)}
-              </span>
-              <span className="h-4 rounded-sm bg-neutral-100 dark:bg-neutral-800">
-                <span
-                  className="block h-full rounded-sm bg-indigo-500"
-                  style={{ width: `${maxValue ? Math.max(0, (values[index] / maxValue) * 100) : 0}%` }}
-                />
-              </span>
-              <span className="tabular-nums">{values[index].toLocaleString()}</span>
-            </li>
-          ))}
-        </ol>
       ) : (
         <div
           className="h-80"

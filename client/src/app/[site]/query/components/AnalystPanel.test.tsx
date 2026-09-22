@@ -51,13 +51,14 @@ it("restores a saved conversation and can start a new one without deleting the o
   expect(await screen.findByText("answer")).toBeTruthy();
   expect(screen.getByText("answer").tagName).toBe("STRONG");
   expect(mocks.get).toHaveBeenCalledWith("org-1", 42, "saved-1", expect.any(AbortSignal));
+  expect(screen.getByRole("navigation", { name: "Conversation history" }).textContent).toContain("Visits?");
 
   vi.spyOn(window, "confirm").mockReturnValue(false);
-  fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Delete conversation" })[0]);
   expect(mocks.remove).not.toHaveBeenCalled();
   vi.restoreAllMocks();
 
-  fireEvent.change(screen.getByRole("combobox", { name: "Conversation history" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "New chat" }));
   expect(screen.queryByText("answer")).toBeNull();
   expect(screen.getByRole("option", { name: "Visits?" })).toBeTruthy();
 });

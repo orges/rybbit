@@ -1,6 +1,6 @@
 "use client";
 
-import { Square, Send, Trash2 } from "lucide-react";
+import { Plus, Search, Square, Send, Trash2 } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
@@ -16,7 +16,7 @@ import {
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
 import { getErrorMessage, isAbortError } from "../utils";
-import { ResultChart } from "./ResultChart";
+import { chartData, ResultChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
 
@@ -31,6 +31,7 @@ export function AnalystPanel({
 }) {
   const t = useExtracted();
   const [question, setQuestion] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function AnalystPanel({
     abortRef.current?.abort();
     historyAbortRef.current?.abort();
     setExchanges([]);
+    setChatSearch("");
     setConversations([]);
     setConversationId(null);
     setHistoryError(null);
@@ -186,184 +188,241 @@ export function AnalystPanel({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
+      className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
       aria-label={t("AI analyst")}
     >
-      <div className="flex items-center gap-2 border-b border-neutral-150 px-4 py-3 text-sm dark:border-neutral-850">
-        <span className="font-medium">{t("AI analyst")}</span>
-        <select
-          aria-label={t("Conversation history")}
-          className="min-w-0 flex-1 rounded bg-white text-xs text-neutral-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:bg-neutral-900 dark:text-neutral-100"
-          value={conversationId ?? ""}
-          onChange={event => void selectConversation(event.target.value)}
-          disabled={busy || loadingHistory}
-        >
-          <option value="">{t("New chat")}</option>
-          {conversations.map(conversation => (
-            <option key={conversation.id} value={conversation.id}>
-              {conversation.title}
-            </option>
-          ))}
-        </select>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={!conversationId || busy || loadingHistory}
-          onClick={() => void removeConversation()}
-          aria-label={t("Delete conversation")}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 md:p-6" aria-live="polite">
-        <div className="mx-auto max-w-4xl space-y-8">
-          {historyError && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {historyError}
-            </p>
-          )}
-          {loadingHistory && <p className="text-sm text-neutral-500">{t("Loading...")}</p>}
-          {exchanges.length === 0 && !loadingHistory && (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              {t("Ask a question about this site's analytics.")}
-            </p>
-          )}
-          {exchanges.map((exchange, index) => (
-            <div key={index} className="space-y-3 text-sm">
-              <p className="ml-auto max-w-[85%] rounded-2xl bg-neutral-100 px-4 py-3 font-medium whitespace-pre-wrap dark:bg-neutral-800">
-                {exchange.question}
-              </p>
-              {exchange.error && (
-                <p role="alert" className="text-red-600 dark:text-red-400">
-                  {exchange.error}
-                </p>
-              )}
-              {exchange.result && (
-                <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
-                  <div className="space-y-3 leading-relaxed break-words">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => <p>{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
-                        h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
-                        h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
-                        a: ({ children, href }) => (
-                          <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
-                            {children}
-                          </a>
-                        ),
-                        code: ({ children }) => (
-                          <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
-                            {children}
-                          </code>
-                        ),
-                        pre: ({ children }) => (
-                          <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
-                            {children}
-                          </pre>
-                        ),
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse text-xs">{children}</table>
-                          </div>
-                        ),
-                        th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
-                        td: ({ children }) => <td className="border p-2">{children}</td>,
-                      }}
-                    >
-                      {exchange.result.summary || t("Analyzing…")}
-                    </ReactMarkdown>
-                  </div>
-                  <ResultChart rows={exchange.result.rows} />
-                  {exchange.result.rows.length > 0 && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr>
-                            {Object.keys(exchange.result.rows[0]).map(key => (
-                              <th key={key} className="border-b p-2">
-                                {key}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
-                            <tr key={rowIndex}>
-                              {Object.keys(exchange.result!.rows[0]).map(key => (
-                                <td key={key} className="border-b p-2">
-                                  {String(row[key] ?? "")}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <p className="mt-2 text-neutral-500 dark:text-neutral-400">
-                        {t("Showing {shown} of {count} rows", {
-                          shown: String(Math.min(10, exchange.result.rows.length)),
-                          count: String(exchange.result.rowCount),
-                        })}
-                      </p>
-                    </div>
-                  )}
-                  <details className="text-xs">
-                    <summary className="cursor-pointer">{t("View SQL")}</summary>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">
-                      {exchange.result.query}
-                    </pre>
-                  </details>
-                </div>
-              )}
-              {!exchange.error && !exchange.result && <p className="text-neutral-500">{t("Analyzing…")}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
-      <form onSubmit={submit} className="flex gap-2 border-t border-neutral-150 p-3 dark:border-neutral-850 md:px-6">
-        <textarea
-          rows={2}
-          className="min-w-0 flex-1 resize-none rounded-lg border border-neutral-150 bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:border-neutral-800"
-          aria-label={t("Ask about your analytics")}
-          placeholder={t("Ask about your analytics")}
-          value={question}
-          onChange={event => setQuestion(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          maxLength={4000}
-          disabled={!organizationId || busy || loadingHistory}
-        />
-        {busy ? (
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-150 dark:border-neutral-850 md:flex">
+        <div className="flex gap-1 border-b border-neutral-150 p-2 dark:border-neutral-850">
+          <div className="flex min-w-0 flex-1 items-center gap-1 rounded border border-neutral-150 px-2 dark:border-neutral-800">
+            <Search className="h-4 w-4 shrink-0 text-neutral-500" />
+            <input
+              aria-label={t("Search chats")}
+              placeholder={t("Search chats")}
+              className="min-w-0 flex-1 bg-transparent py-1.5 text-xs outline-none"
+              value={chatSearch}
+              onChange={event => setChatSearch(event.target.value)}
+            />
+          </div>
           <Button
             type="button"
             variant="outline"
-            onClick={() => {
-              abortRef.current?.abort();
-              setExchanges(current => current.slice(0, -1));
-              setBusy(false);
-            }}
-            aria-label={t("Stop analysis")}
+            size="icon"
+            aria-label={t("New chat")}
+            disabled={busy || loadingHistory}
+            onClick={() => void selectConversation("")}
           >
-            <Square className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
           </Button>
-        ) : (
+        </div>
+        <nav aria-label={t("Conversation history")} className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+          {conversations
+            .filter(conversation => conversation.title.toLowerCase().includes(chatSearch.toLowerCase()))
+            .map(conversation => (
+              <button
+                key={conversation.id}
+                type="button"
+                disabled={busy || loadingHistory}
+                aria-current={conversationId === conversation.id ? "page" : undefined}
+                className={`block w-full truncate rounded px-2 py-2 text-left text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 ${conversationId === conversation.id ? "bg-neutral-100 dark:bg-neutral-800" : ""}`}
+                title={conversation.title}
+                onClick={() => void selectConversation(conversation.id)}
+              >
+                {conversation.title}
+              </button>
+            ))}
+        </nav>
+        {conversationId && (
           <Button
-            type="submit"
-            disabled={!organizationId || !question.trim() || loadingHistory}
-            aria-label={t("Send question")}
+            type="button"
+            variant="ghost"
+            className="m-2 justify-start text-xs"
+            disabled={busy || loadingHistory}
+            onClick={() => void removeConversation()}
           >
-            <Send className="h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4" />
+            {t("Delete conversation")}
           </Button>
         )}
-      </form>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-neutral-150 px-4 py-3 text-sm dark:border-neutral-850">
+          <span className="font-medium">{t("AI analyst")}</span>
+          <select
+            aria-label={t("Conversation history")}
+            className="ml-auto min-w-0 max-w-40 flex-1 rounded bg-white text-xs text-neutral-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:bg-neutral-900 dark:text-neutral-100 md:hidden"
+            value={conversationId ?? ""}
+            onChange={event => void selectConversation(event.target.value)}
+            disabled={busy || loadingHistory}
+          >
+            <option value="">{t("New chat")}</option>
+            {conversations.map(conversation => (
+              <option key={conversation.id} value={conversation.id}>
+                {conversation.title}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            disabled={!conversationId || busy || loadingHistory}
+            onClick={() => void removeConversation()}
+            aria-label={t("Delete conversation")}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 md:p-6" aria-live="polite">
+          <div className="mx-auto max-w-4xl space-y-8">
+            {historyError && (
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                {historyError}
+              </p>
+            )}
+            {loadingHistory && <p className="text-sm text-neutral-500">{t("Loading...")}</p>}
+            {exchanges.length === 0 && !loadingHistory && (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                {t("Ask a question about this site's analytics.")}
+              </p>
+            )}
+            {exchanges.map((exchange, index) => (
+              <div key={index} className="space-y-3 text-sm">
+                <p className="ml-auto max-w-[85%] rounded-2xl bg-neutral-100 px-4 py-3 font-medium whitespace-pre-wrap dark:bg-neutral-800">
+                  {exchange.question}
+                </p>
+                {exchange.error && (
+                  <p role="alert" className="text-red-600 dark:text-red-400">
+                    {exchange.error}
+                  </p>
+                )}
+                {exchange.result && (
+                  <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
+                    <div className="space-y-3 leading-relaxed break-words">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p>{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+                          h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
+                          h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
+                          a: ({ children, href }) => (
+                            <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
+                              {children}
+                            </a>
+                          ),
+                          code: ({ children }) => (
+                            <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
+                              {children}
+                            </code>
+                          ),
+                          pre: ({ children }) => (
+                            <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+                              {children}
+                            </pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse text-xs">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
+                          td: ({ children }) => <td className="border p-2">{children}</td>,
+                        }}
+                      >
+                        {exchange.result.summary || t("Analyzing…")}
+                      </ReactMarkdown>
+                    </div>
+                    <ResultChart rows={exchange.result.rows} />
+                    {exchange.result.rows.length > 0 &&
+                      !(exchange.result.rows.length === 1 && chartData(exchange.result.rows)) && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr>
+                                {Object.keys(exchange.result.rows[0]).map(key => (
+                                  <th key={key} className="border-b p-2">
+                                    {key}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
+                                <tr key={rowIndex}>
+                                  {Object.keys(exchange.result!.rows[0]).map(key => (
+                                    <td key={key} className="border-b p-2">
+                                      {String(row[key] ?? "")}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <p className="mt-2 text-neutral-500 dark:text-neutral-400">
+                            {t("Showing {shown} of {count} rows", {
+                              shown: String(Math.min(10, exchange.result.rows.length)),
+                              count: String(exchange.result.rowCount),
+                            })}
+                          </p>
+                        </div>
+                      )}
+                    <details className="text-xs">
+                      <summary className="cursor-pointer">{t("View SQL")}</summary>
+                      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">
+                        {exchange.result.query}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+                {!exchange.error && !exchange.result && <p className="text-neutral-500">{t("Analyzing…")}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <form onSubmit={submit} className="flex gap-2 border-t border-neutral-150 p-3 dark:border-neutral-850 md:px-6">
+          <textarea
+            rows={2}
+            className="min-w-0 flex-1 resize-none rounded-lg border border-neutral-150 bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:border-neutral-800"
+            aria-label={t("Ask about your analytics")}
+            placeholder={t("Ask about your analytics")}
+            value={question}
+            onChange={event => setQuestion(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            maxLength={4000}
+            disabled={!organizationId || busy || loadingHistory}
+          />
+          {busy ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                abortRef.current?.abort();
+                setExchanges(current => current.slice(0, -1));
+                setBusy(false);
+              }}
+              aria-label={t("Stop analysis")}
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={!organizationId || !question.trim() || loadingHistory}
+              aria-label={t("Send question")}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
+        </form>
+      </div>
     </section>
   );
 }

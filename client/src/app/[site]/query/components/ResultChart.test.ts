@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { chartData, chartLabel } from "./ResultChart";
+import { chartData, chartLabel, overviewTable } from "./ResultChart";
 
 it("makes comparison column names readable", () => {
   expect(chartLabel("sessions_3_days_ago")).toBe("Sessions 3 days ago");
@@ -30,6 +30,24 @@ it("charts multiple numeric series against a date", () => {
     points: [
       { label: "2026-09-19", sessions: 5, events: 9 },
       { label: "2026-09-20", sessions: 8, events: 12 },
+    ],
+  });
+});
+
+it("pivots one-row comparisons into a table by metric and period", () => {
+  const data = chartData([
+    {
+      sessions_3_days_ago: 5242,
+      sessions_4_days_ago: 5100,
+      events_3_days_ago: 175045,
+      events_4_days_ago: 160300,
+    },
+  ]);
+  expect(overviewTable(data!.points)).toEqual({
+    columns: ["3 days ago", "4 days ago"],
+    rows: [
+      { label: "Sessions", values: [5242, 5100] },
+      { label: "Events", values: [175045, 160300] },
     ],
   });
 });
