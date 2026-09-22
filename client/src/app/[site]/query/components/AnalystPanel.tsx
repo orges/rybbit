@@ -102,7 +102,11 @@ export function AnalystPanel({
       const result = await analyzeQuery(
         organizationId,
         { query: generated.query, question: prompt, siteId },
-        controller.signal
+        controller.signal,
+        partial => {
+          if (!controller.signal.aborted)
+            setExchanges(current => [...current.slice(0, -1), { question: prompt, result: partial }]);
+        }
       );
       if (controller.signal.aborted) return;
       setExchanges(current => [...current.slice(0, -1), { question: prompt, result }]);
@@ -145,7 +149,7 @@ export function AnalystPanel({
             )}
             {exchange.result && (
               <div className="space-y-3 border-t border-neutral-150 pt-3 dark:border-neutral-850">
-                <p className="whitespace-pre-wrap leading-relaxed">{exchange.result.summary}</p>
+                <p className="whitespace-pre-wrap leading-relaxed">{exchange.result.summary || t("Analyzing…")}</p>
                 <ResultChart rows={exchange.result.rows} />
                 {exchange.result.rows.length > 0 && (
                   <div className="overflow-x-auto">

@@ -1,7 +1,8 @@
+import type { OutgoingHttpHeaders } from "node:http";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getSitesUserHasAccessTo } from "../../lib/auth-utils.js";
-import { OpenRouterError, callOpenRouter } from "../../lib/openrouter.js";
+import { OpenRouterError, streamOpenRouter } from "../../lib/openrouter.js";
 import { executeScopedQuery } from "./runCustomQuery.js";
 import {
   MAX_CUSTOM_QUERY_LENGTH,
@@ -31,28 +32,40 @@ export async function analyzeQuery(
     return reply.status(403).send({ error: "No access to the requested site" });
   }
 
-  let data: Record<string, unknown>[];
-  try {
-    ({ data } = await executeScopedQuery(body.data.query, body.data.siteId ? [body.data.siteId] : accessibleSiteIds));
-  } catch (error) {
-    return reply.status(400).send({ error: sanitizeClickhouseError(error) });
-  }
-
-  // Bound the evidence sent to the provider, including unusually large property values.
-  const preview = JSON.stringify(
-    data
-      .slice(0, 50)
-      .map(row =>
-        Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 200) : value])
-        )
-      )
-  ).slice(0, 20000);
   const abort = new AbortController();
   const onClose = () => abort.abort();
+  request.raw.on("aborted", onClose);
   reply.raw.on("close", onClose);
   try {
-    const summary = await callOpenRouter(
+    let data: Record<string, unknown>[];
+    try {
+      ({ data } = await executeScopedQuery(body.data.query, body.data.siteId ? [body.data.siteId] : accessibleSiteIds));
+    } catch (error) {
+      return reply.status(400).send({ error: sanitizeClickhouseError(error) });
+    }
+    if (abort.signal.aborted) return reply;
+
+    // Bound the evidence sent to the provider, including unusually large property values.
+    const preview = JSON.stringify(
+      data
+        .slice(0, 50)
+        .map(row =>
+          Object.fromEntries(
+            Object.entries(row).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 200) : value])
+          )
+        )
+    ).slice(0, 20000);
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      ...reply.getHeaders(),
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    } as OutgoingHttpHeaders);
+    const send = (event: object) => reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+    send({ type: "result", query: body.data.query, rows: data.slice(0, 50), rowCount: data.length });
+
+    for await (const text of streamOpenRouter(
       [
         {
           role: "system",
@@ -71,15 +84,28 @@ export async function analyzeQuery(
         },
       ],
       { maxTokens: 500, signal: abort.signal }
-    );
-    return reply.send({ query: body.data.query, summary, rows: data.slice(0, 50), rowCount: data.length });
+    )) {
+      if (abort.signal.aborted) break;
+      send({ type: "delta", text });
+    }
+    if (!abort.signal.aborted) send({ type: "done" });
+    reply.raw.end();
+    return reply;
   } catch (error) {
     if (abort.signal.aborted) return reply;
     request.log.error(error, "Failed to summarize analytics query");
-    return reply.status(error instanceof OpenRouterError && error.code === "missing_api_key" ? 503 : 502).send({
-      error: "Could not summarize the analytics query",
-    });
+    if (reply.raw.headersSent) {
+      reply.raw.write(
+        `data: ${JSON.stringify({ type: "error", error: "Could not summarize the analytics query" })}\n\n`
+      );
+      reply.raw.end();
+      return reply;
+    }
+    return reply
+      .status(error instanceof OpenRouterError && error.code === "missing_api_key" ? 503 : 502)
+      .send({ error: "Could not summarize the analytics query" });
   } finally {
+    request.raw.off("aborted", onClose);
     reply.raw.off("close", onClose);
   }
 }

@@ -1,4 +1,5 @@
 import { authedFetch } from "../../utils";
+import { BACKEND_URL } from "../../../lib/const";
 
 export type CustomQueryRow = Record<string, unknown>;
 
@@ -36,16 +37,57 @@ export type AnalyzeQueryResponse = {
   rowCount: number;
 };
 
-export function analyzeQuery(
+export async function analyzeQuery(
   organizationId: string,
   data: { query: string; question: string; siteId: number },
-  signal?: AbortSignal
-) {
-  return authedFetch<AnalyzeQueryResponse>(`/organizations/${organizationId}/analytics/query/analyze`, undefined, {
+  signal: AbortSignal,
+  onProgress: (result: AnalyzeQueryResponse) => void
+): Promise<AnalyzeQueryResponse> {
+  const response = await fetch(`${BACKEND_URL}/organizations/${organizationId}/analytics/query/analyze`, {
     method: "POST",
-    data,
+    credentials: "include",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify(data),
     signal,
   });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `Analysis failed (${response.status})`);
+  }
+  if (!response.body) throw new Error("Analysis stream is unavailable");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AnalyzeQueryResponse | undefined;
+  let complete = false;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let boundary: number;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const line = frame.split("\n").find(line => line.startsWith("data: "));
+        if (!line) continue;
+        const event = JSON.parse(line.slice(6));
+        if (event.type === "error") throw new Error(event.error || "Analysis failed");
+        if (event.type === "result")
+          result = { query: event.query, rows: event.rows, rowCount: event.rowCount, summary: "" };
+        if (event.type === "delta" && result && typeof event.text === "string")
+          result = { ...result, summary: result.summary + event.text };
+        if (event.type === "done") complete = true;
+        if (result) onProgress(result);
+      }
+      if (done) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  if (!complete || !result?.summary.trim()) throw new Error("Analysis stream ended before the summary was complete");
+  return result;
 }
 
 export function runCustomQuery(organizationId: string, query: string, siteId?: number) {

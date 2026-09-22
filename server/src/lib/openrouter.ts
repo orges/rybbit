@@ -17,6 +17,11 @@ interface OpenRouterResponse {
   error?: unknown;
 }
 
+type OpenRouterStreamEvent = {
+  choices?: Array<{ delta?: { content?: string | null } }>;
+  error?: { message?: string };
+};
+
 export type OpenRouterErrorCode = "missing_api_key" | "http_error" | "invalid_json" | "empty_choices" | "empty_content";
 
 export type OpenRouterMetadata = {
@@ -83,29 +88,7 @@ export async function callOpenRouterWithMetadata(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   options?: OpenRouterOptions
 ): Promise<{ content: string; metadata: OpenRouterMetadata }> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = getOpenRouterModel(options?.model);
-
-  if (!apiKey) {
-    throw new OpenRouterError("missing_api_key", "OPENROUTER_API_KEY is not configured", { model });
-  }
-
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://rybbit.com",
-      "X-Title": "Rybbit Analytics",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: options?.temperature ?? 0.3,
-      max_tokens: options?.maxTokens ?? 1000,
-    }),
-    signal: options?.signal,
-  });
+  const { response, model } = await requestOpenRouter(messages, options);
   const baseMetadata: OpenRouterMetadata = {
     model,
     status: response.status,
@@ -175,4 +158,95 @@ export async function callOpenRouterWithMetadata(
   }
 
   return { content, metadata };
+}
+
+async function requestOpenRouter(
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  options?: OpenRouterOptions,
+  stream = false
+) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const model = getOpenRouterModel(options?.model);
+  if (!apiKey) throw new OpenRouterError("missing_api_key", "OPENROUTER_API_KEY is not configured", { model });
+  const response = await fetch(OPENROUTER_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://rybbit.com",
+      "X-Title": "Rybbit Analytics",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: options?.temperature ?? 0.3,
+      max_tokens: options?.maxTokens ?? 1000,
+      ...(stream ? { stream: true } : {}),
+    }),
+    signal: options?.signal,
+  });
+  return { response, model };
+}
+
+export async function* streamOpenRouter(
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  options?: OpenRouterOptions
+): AsyncGenerator<string> {
+  const { response, model } = await requestOpenRouter(messages, options, true);
+  if (!response.ok) {
+    throw new OpenRouterError("http_error", `OpenRouter API error: ${response.status}`, {
+      model,
+      status: response.status,
+    });
+  }
+  if (!response.body) throw new OpenRouterError("empty_content", "OpenRouter returned an empty stream", { model });
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let dataLines: string[] = [];
+  let done = false;
+  let length = 0;
+  try {
+    while (!done) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newline).replace(/\r$/, "");
+        buffer = buffer.slice(newline + 1);
+        if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+        if (line !== "" || !dataLines.length) continue;
+        const payload = dataLines.join("\n");
+        dataLines = [];
+        if (payload.length > 65536)
+          throw new OpenRouterError("http_error", "OpenRouter stream event is too large", { model });
+        if (payload === "[DONE]") {
+          done = true;
+          break;
+        }
+        let event: OpenRouterStreamEvent;
+        try {
+          event = JSON.parse(payload) as OpenRouterStreamEvent;
+        } catch {
+          throw new OpenRouterError("invalid_json", "OpenRouter returned an invalid stream event", { model });
+        }
+        if (event.error) throw new OpenRouterError("http_error", "OpenRouter stream failed", { model });
+        const text = event.choices?.[0]?.delta?.content;
+        if (typeof text === "string") {
+          length += text.length;
+          if (length > 20000)
+            throw new OpenRouterError("http_error", "OpenRouter stream exceeded the response limit", { model });
+          yield text;
+        }
+      }
+      if (buffer.length > 65536 || dataLines.join("\n").length > 65536)
+        throw new OpenRouterError("http_error", "OpenRouter stream event is too large", { model });
+      if (chunk.done) break;
+    }
+    if (!done || !length) throw new OpenRouterError("empty_content", "OpenRouter stream ended early", { model });
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 }
