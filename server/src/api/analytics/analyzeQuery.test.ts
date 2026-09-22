@@ -4,12 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 const { getSitesUserHasAccessTo } = vi.hoisted(() => ({ getSitesUserHasAccessTo: vi.fn() }));
 const { streamOpenRouter } = vi.hoisted(() => ({ streamOpenRouter: vi.fn() }));
+const { canReadConversation, saveAiExchange } = vi.hoisted(() => ({
+  canReadConversation: vi.fn(),
+  saveAiExchange: vi.fn(),
+}));
 vi.mock("../../db/clickhouse/clickhouse.js", () => ({ clickhouseQuery: { query } }));
 vi.mock("../../lib/auth-utils.js", () => ({ getSitesUserHasAccessTo }));
 vi.mock("../../lib/openrouter.js", async importOriginal => ({
   ...(await importOriginal<typeof import("../../lib/openrouter.js")>()),
   streamOpenRouter,
 }));
+vi.mock("./aiConversations.js", () => ({ canReadConversation, saveAiExchange }));
 
 import { analyzeQuery } from "./analyzeQuery.js";
 import { generateCustomQuery } from "./generateCustomQuery.js";
@@ -59,6 +64,7 @@ describe("analyzeQuery", () => {
       yield "Four ";
       yield "visits";
     });
+    saveAiExchange.mockResolvedValue("e8dfdb2e-8159-4d51-a56d-22404613da4e");
     const lines: string[] = [];
     const raw = Object.assign(new EventEmitter(), {
       headersSent: false,
@@ -76,6 +82,7 @@ describe("analyzeQuery", () => {
     await analyzeQuery(
       {
         params: { organizationId: "org-1" },
+        user: { id: "user-1" },
         body: { query: "SELECT count() FROM scoped_events", question: "Visits?", siteId: 42 },
         raw: new EventEmitter(),
         log: { error: vi.fn() },
@@ -91,7 +98,41 @@ describe("analyzeQuery", () => {
     );
     expect(lines.map(line => JSON.parse(line.slice(6)).type)).toEqual(["result", "delta", "delta", "done"]);
     expect(JSON.parse(lines[0].slice(6)).rows).toEqual([{ visits: 4 }]);
+    expect(saveAiExchange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        organizationId: "org-1",
+        siteId: 42,
+        summary: "Four visits",
+      })
+    );
+    expect(JSON.parse(lines.at(-1)!.slice(6)).conversationId).toBe("e8dfdb2e-8159-4d51-a56d-22404613da4e");
     expect(raw.end).toHaveBeenCalledOnce();
+  });
+
+  it("refuses another user's conversation before querying or streaming", async () => {
+    saveAiExchange.mockClear();
+    getSitesUserHasAccessTo.mockResolvedValue([{ organizationId: "org-1", siteId: 42 }]);
+    canReadConversation.mockResolvedValue(false);
+    query.mockReset();
+    const send = vi.fn();
+    const status = vi.fn(() => ({ send }));
+    await analyzeQuery(
+      {
+        params: { organizationId: "org-1" },
+        user: { id: "user-1" },
+        body: {
+          query: "SELECT count() FROM scoped_events",
+          question: "Visits?",
+          siteId: 42,
+          conversationId: "e8dfdb2e-8159-4d51-a56d-22404613da4e",
+        },
+      } as unknown as Parameters<typeof analyzeQuery>[0],
+      { status } as unknown as Parameters<typeof analyzeQuery>[1]
+    );
+    expect(status).toHaveBeenCalledWith(404);
+    expect(query).not.toHaveBeenCalled();
+    expect(saveAiExchange).not.toHaveBeenCalled();
   });
 });
 

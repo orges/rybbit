@@ -23,6 +23,7 @@ import {
 } from "./api/admin/index.js";
 import {
   analyzeQuery,
+  handleAiConversations,
   createAnnotation,
   createDashboard,
   createSegment,
@@ -516,6 +517,17 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     "/organizations/:organizationId/analytics/query/analyze",
     withRateLimit(orgSqlRead, generateQueryRateLimit),
     analyzeQuery
+  );
+  fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleAiConversations);
+  fastify.get(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleAiConversations
+  );
+  fastify.delete(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleAiConversations
   );
   fastify.get("/sites/:siteId/performance/overview", publicAnalyticsRead, getPerformanceOverview);
   fastify.get("/sites/:siteId/performance/time-series", publicAnalyticsRead, getPerformanceTimeSeries);

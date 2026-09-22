@@ -31,15 +31,49 @@ export type GenerateCustomQueryRequest = {
 };
 
 export type AnalyzeQueryResponse = {
+  conversationId?: string | null;
   query: string;
   summary: string;
   rows: CustomQueryRow[];
   rowCount: number;
 };
 
+export type AiConversation = { id: string; title: string; updatedAt: string };
+export type SavedAiExchange = {
+  question: string;
+  query: string;
+  summary: string;
+  rows: CustomQueryRow[];
+  rowCount: number;
+};
+
+export function listAiConversations(organizationId: string, siteId: number, signal?: AbortSignal) {
+  return authedFetch<AiConversation[]>(
+    `/organizations/${organizationId}/analytics/conversations`,
+    { siteId },
+    { signal }
+  );
+}
+
+export function getAiConversation(organizationId: string, siteId: number, id: string, signal?: AbortSignal) {
+  return authedFetch<SavedAiExchange[]>(
+    `/organizations/${organizationId}/analytics/conversations/${id}`,
+    { siteId },
+    { signal }
+  );
+}
+
+export function deleteAiConversation(organizationId: string, siteId: number, id: string) {
+  return authedFetch(
+    `/organizations/${organizationId}/analytics/conversations/${id}`,
+    { siteId },
+    { method: "DELETE" }
+  );
+}
+
 export async function analyzeQuery(
   organizationId: string,
-  data: { query: string; question: string; siteId: number },
+  data: { query: string; question: string; siteId: number; conversationId?: string },
   signal: AbortSignal,
   onProgress: (result: AnalyzeQueryResponse) => void
 ): Promise<AnalyzeQueryResponse> {
@@ -77,7 +111,10 @@ export async function analyzeQuery(
           result = { query: event.query, rows: event.rows, rowCount: event.rowCount, summary: "" };
         if (event.type === "delta" && result && typeof event.text === "string")
           result = { ...result, summary: result.summary + event.text };
-        if (event.type === "done") complete = true;
+        if (event.type === "done") {
+          complete = true;
+          if (result) result = { ...result, conversationId: event.conversationId };
+        }
         if (result) onProgress(result);
       }
       if (done) break;

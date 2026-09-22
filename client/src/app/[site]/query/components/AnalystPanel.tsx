@@ -1,11 +1,15 @@
 "use client";
 
-import { Square, Send } from "lucide-react";
+import { Square, Send, Trash2 } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   analyzeQuery,
+  deleteAiConversation,
   generateCustomQuery,
+  getAiConversation,
+  listAiConversations,
+  type AiConversation,
   type AnalyzeQueryResponse,
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
@@ -59,24 +63,104 @@ export function AnalystPanel({
   const t = useExtracted();
   const [question, setQuestion] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [conversations, setConversations] = useState<AiConversation[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      historyAbortRef.current?.abort();
+    },
+    []
+  );
   useEffect(() => {
     abortRef.current?.abort();
+    historyAbortRef.current?.abort();
     setExchanges([]);
+    setConversations([]);
+    setConversationId(null);
+    setHistoryError(null);
     setBusy(false);
+    if (!organizationId) {
+      setLoadingHistory(false);
+      return;
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+    setLoadingHistory(true);
+    const load = async () => {
+      try {
+        const list = await listAiConversations(organizationId, siteId, controller.signal);
+        if (controller.signal.aborted) return;
+        setConversations(list);
+        if (list[0]) {
+          const messages = await getAiConversation(organizationId, siteId, list[0].id, controller.signal);
+          if (controller.signal.aborted) return;
+          setConversationId(list[0].id);
+          setExchanges(messages.map(({ question, ...result }) => ({ question, result })));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setHistoryError(getErrorMessage(error, t("Could not load conversation history")));
+      } finally {
+        if (!controller.signal.aborted) setLoadingHistory(false);
+      }
+    };
+    void load();
+    return () => controller.abort();
   }, [organizationId, siteId]);
+
+  const selectConversation = async (id: string) => {
+    historyAbortRef.current?.abort();
+    setHistoryError(null);
+    setConversationId(id || null);
+    setExchanges([]);
+    if (!id || !organizationId) {
+      setLoadingHistory(false);
+      return;
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+    setLoadingHistory(true);
+    try {
+      const messages = await getAiConversation(organizationId, siteId, id, controller.signal);
+      if (!controller.signal.aborted) setExchanges(messages.map(({ question, ...result }) => ({ question, result })));
+    } catch (error) {
+      if (!controller.signal.aborted) setHistoryError(getErrorMessage(error, t("Could not load conversation history")));
+    } finally {
+      if (!controller.signal.aborted) setLoadingHistory(false);
+    }
+  };
+
+  const removeConversation = async () => {
+    if (!organizationId || !conversationId || !window.confirm(t("Delete this conversation?"))) return;
+    setLoadingHistory(true);
+    try {
+      await deleteAiConversation(organizationId, siteId, conversationId);
+      setConversations(current => current.filter(conversation => conversation.id !== conversationId));
+      setConversationId(null);
+      setExchanges([]);
+    } catch (error) {
+      setHistoryError(getErrorMessage(error, t("Could not delete conversation")));
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const prompt = question.trim();
-    if (!organizationId || !prompt || busy) return;
+    if (!organizationId || !prompt || busy || loadingHistory) return;
 
     const controller = new AbortController();
     abortRef.current = controller;
     setQuestion("");
+    setHistoryError(null);
     setBusy(true);
     setExchanges(current => [...current, { question: prompt }]);
     try {
@@ -101,7 +185,7 @@ export function AnalystPanel({
       if (controller.signal.aborted) return;
       const result = await analyzeQuery(
         organizationId,
-        { query: generated.query, question: prompt, siteId },
+        { query: generated.query, question: prompt, siteId, conversationId: conversationId ?? undefined },
         controller.signal,
         partial => {
           if (!controller.signal.aborted)
@@ -110,6 +194,12 @@ export function AnalystPanel({
       );
       if (controller.signal.aborted) return;
       setExchanges(current => [...current.slice(0, -1), { question: prompt, result }]);
+      if (result.conversationId) {
+        setConversationId(result.conversationId);
+        void listAiConversations(organizationId, siteId)
+          .then(setConversations)
+          .catch(() => {});
+      }
     } catch (error) {
       if (!isAbortError(error) && !controller.signal.aborted) {
         setExchanges(current => [
@@ -130,11 +220,41 @@ export function AnalystPanel({
       className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
       aria-label={t("AI analyst")}
     >
-      <div className="border-b border-neutral-150 px-4 py-3 text-sm font-medium dark:border-neutral-850">
-        {t("AI analyst")}
+      <div className="flex items-center gap-2 border-b border-neutral-150 px-4 py-3 text-sm dark:border-neutral-850">
+        <span className="font-medium">{t("AI analyst")}</span>
+        <select
+          aria-label={t("Conversation history")}
+          className="min-w-0 flex-1 rounded bg-white text-xs text-neutral-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:bg-neutral-900 dark:text-neutral-100"
+          value={conversationId ?? ""}
+          onChange={event => void selectConversation(event.target.value)}
+          disabled={busy || loadingHistory}
+        >
+          <option value="">{t("New chat")}</option>
+          {conversations.map(conversation => (
+            <option key={conversation.id} value={conversation.id}>
+              {conversation.title}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={!conversationId || busy || loadingHistory}
+          onClick={() => void removeConversation()}
+          aria-label={t("Delete conversation")}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4" aria-live="polite">
-        {exchanges.length === 0 && (
+        {historyError && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {historyError}
+          </p>
+        )}
+        {loadingHistory && <p className="text-sm text-neutral-500">{t("Loading...")}</p>}
+        {exchanges.length === 0 && !loadingHistory && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t("Ask a question about this site's analytics.")}
           </p>
@@ -203,7 +323,7 @@ export function AnalystPanel({
           value={question}
           onChange={event => setQuestion(event.target.value)}
           maxLength={4000}
-          disabled={!organizationId || busy}
+          disabled={!organizationId || busy || loadingHistory}
         />
         {busy ? (
           <Button
@@ -219,7 +339,11 @@ export function AnalystPanel({
             <Square className="h-4 w-4" />
           </Button>
         ) : (
-          <Button type="submit" disabled={!organizationId || !question.trim()} aria-label={t("Send question")}>
+          <Button
+            type="submit"
+            disabled={!organizationId || !question.trim() || loadingHistory}
+            aria-label={t("Send question")}
+          >
             <Send className="h-4 w-4" />
           </Button>
         )}

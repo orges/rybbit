@@ -143,6 +143,43 @@ export const dashboards = pgTable("dashboards", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
 
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    siteId: integer("site_id")
+      .notNull()
+      .references(() => sites.siteId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+  },
+  table => [index("ai_conversations_owner_site_idx").on(table.userId, table.siteId, table.updatedAt)]
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    query: text("query").notNull(),
+    summary: text("summary").notNull(),
+    rows: jsonb("rows").notNull().$type<Record<string, unknown>[]>().default([]),
+    rowCount: integer("row_count").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  },
+  table => [index("ai_messages_conversation_id_idx").on(table.conversationId, table.id)]
+);
+
 // Timeline annotations: a note pinned to a date (or range) on the traffic chart.
 // site_id is null for organization-wide annotations, which show on every site
 // in organization_id.

@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getSitesUserHasAccessTo } from "../../lib/auth-utils.js";
 import { OpenRouterError, streamOpenRouter } from "../../lib/openrouter.js";
+import { canReadConversation, saveAiExchange } from "./aiConversations.js";
 import { executeScopedQuery } from "./runCustomQuery.js";
 import {
   MAX_CUSTOM_QUERY_LENGTH,
@@ -14,6 +15,7 @@ const bodySchema = z.object({
   query: z.string().trim().min(1).max(MAX_CUSTOM_QUERY_LENGTH),
   question: z.string().trim().min(1).max(4000),
   siteId: z.number().int().positive().optional(),
+  conversationId: z.string().uuid().optional(),
 });
 
 export async function analyzeQuery(
@@ -30,6 +32,20 @@ export async function analyzeQuery(
     .map(site => site.siteId);
   if (!accessibleSiteIds.length || (body.data.siteId && !accessibleSiteIds.includes(body.data.siteId))) {
     return reply.status(403).send({ error: "No access to the requested site" });
+  }
+  const userId = request.user?.id;
+  if (body.data.conversationId) {
+    if (!userId || !body.data.siteId) return reply.status(403).send({ error: "Conversation not found" });
+    try {
+      if (
+        !(await canReadConversation(userId, request.params.organizationId, body.data.siteId, body.data.conversationId))
+      ) {
+        return reply.status(404).send({ error: "Conversation not found" });
+      }
+    } catch (error) {
+      request.log.error(error, "Failed to verify AI conversation");
+      return reply.status(500).send({ error: "Could not verify conversation" });
+    }
   }
 
   const abort = new AbortController();
@@ -65,6 +81,7 @@ export async function analyzeQuery(
     const send = (event: object) => reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
     send({ type: "result", query: body.data.query, rows: data.slice(0, 50), rowCount: data.length });
 
+    let summary = "";
     for await (const text of streamOpenRouter(
       [
         {
@@ -86,9 +103,26 @@ export async function analyzeQuery(
       { maxTokens: 500, signal: abort.signal }
     )) {
       if (abort.signal.aborted) break;
+      summary += text;
       send({ type: "delta", text });
     }
-    if (!abort.signal.aborted) send({ type: "done" });
+    if (!abort.signal.aborted) {
+      const conversationId =
+        userId && body.data.siteId
+          ? await saveAiExchange({
+              userId,
+              organizationId: request.params.organizationId,
+              siteId: body.data.siteId,
+              conversationId: body.data.conversationId,
+              question: body.data.question,
+              query: body.data.query,
+              summary,
+              rows: data,
+              rowCount: data.length,
+            })
+          : null;
+      send({ type: "done", conversationId });
+    }
     reply.raw.end();
     return reply;
   } catch (error) {
