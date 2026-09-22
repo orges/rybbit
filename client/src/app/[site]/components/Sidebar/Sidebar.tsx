@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   MousePointerClick,
+  MessageSquareText,
   Rewind,
   Settings,
   Split,
@@ -143,6 +144,14 @@ function SidebarContent() {
           </>
         )}
         <SidebarComponents.SectionHeader>{t("Product Analytics")}</SidebarComponents.SectionHeader>
+        {!embed && !privateKey && (IS_CLOUD || DEPLOYMENT) && (
+          <SidebarComponents.Item
+            label={t("AI analyst")}
+            active={isActiveTab("analyst")}
+            href={getTabPath("analyst")}
+            icon={<MessageSquareText className="w-4 h-4" />}
+          />
+        )}
         <div className="hidden md:block">
           {!isMobileSite &&
             !subscription?.planName?.startsWith("appsumo") &&

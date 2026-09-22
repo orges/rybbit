@@ -1881,5 +1881,10 @@
   "I5tGz8": "Could not delete conversation",
   "oWUaOS": "Conversation history",
   "ATDyLP": "New chat",
-  "9eR0Qp": "Delete conversation"
+  "9eR0Qp": "Delete conversation",
+  "4iTlOK": "Chart of {metrics} by {label}",
+  "SHryPO": "Bar",
+  "YcUhLa": "Line",
+  "iaXUrA": "Donut",
+  "u/y8my": "Distribution by {label}"
 }

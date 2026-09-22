@@ -3,6 +3,8 @@
 import { Square, Send, Trash2 } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   analyzeQuery,
   deleteAiConversation,
@@ -14,42 +16,9 @@ import {
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
 import { getErrorMessage, isAbortError } from "../utils";
+import { ResultChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
-
-function ResultChart({ rows }: { rows: AnalyzeQueryResponse["rows"] }) {
-  if (rows.length < 2) return null;
-  const keys = Object.keys(rows[0]);
-  const label = keys.find(key => typeof rows[0][key] === "string" && rows.every(row => row[key] != null));
-  const metric = keys.findLast(
-    key => rows.every(row => row[key] != null && Number.isFinite(Number(row[key]))) && key !== label
-  );
-  if (!label || !metric) return null;
-  const max = Math.max(...rows.slice(0, 12).map(row => Number(row[metric])));
-  if (max <= 0) return null;
-
-  return (
-    <div className="space-y-2 rounded-lg border border-neutral-150 p-3 dark:border-neutral-850">
-      <p className="text-xs font-medium">
-        {metric} by {label}
-      </p>
-      {rows.slice(0, 12).map((row, index) => (
-        <div key={index} className="flex items-center gap-2 text-xs">
-          <span className="w-28 shrink-0 truncate" title={String(row[label])}>
-            {String(row[label])}
-          </span>
-          <div className="h-4 flex-1 bg-neutral-100 dark:bg-neutral-850">
-            <div
-              className="h-full bg-[var(--dataviz)]"
-              style={{ width: `${Math.max(0, (Number(row[metric]) / max) * 100)}%` }}
-            />
-          </div>
-          <span className="w-16 text-right tabular-nums">{Number(row[metric]).toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function AnalystPanel({
   organizationId,
@@ -247,77 +216,118 @@ export function AnalystPanel({
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4" aria-live="polite">
-        {historyError && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {historyError}
-          </p>
-        )}
-        {loadingHistory && <p className="text-sm text-neutral-500">{t("Loading...")}</p>}
-        {exchanges.length === 0 && !loadingHistory && (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            {t("Ask a question about this site's analytics.")}
-          </p>
-        )}
-        {exchanges.map((exchange, index) => (
-          <div key={index} className="space-y-3 text-sm">
-            <p className="font-medium">{exchange.question}</p>
-            {exchange.error && (
-              <p role="alert" className="text-red-600 dark:text-red-400">
-                {exchange.error}
+      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 md:p-6" aria-live="polite">
+        <div className="mx-auto max-w-4xl space-y-8">
+          {historyError && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {historyError}
+            </p>
+          )}
+          {loadingHistory && <p className="text-sm text-neutral-500">{t("Loading...")}</p>}
+          {exchanges.length === 0 && !loadingHistory && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              {t("Ask a question about this site's analytics.")}
+            </p>
+          )}
+          {exchanges.map((exchange, index) => (
+            <div key={index} className="space-y-3 text-sm">
+              <p className="ml-auto max-w-[85%] rounded-2xl bg-neutral-100 px-4 py-3 font-medium whitespace-pre-wrap dark:bg-neutral-800">
+                {exchange.question}
               </p>
-            )}
-            {exchange.result && (
-              <div className="space-y-3 border-t border-neutral-150 pt-3 dark:border-neutral-850">
-                <p className="whitespace-pre-wrap leading-relaxed">{exchange.result.summary || t("Analyzing…")}</p>
-                <ResultChart rows={exchange.result.rows} />
-                {exchange.result.rows.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr>
-                          {Object.keys(exchange.result.rows[0]).map(key => (
-                            <th key={key} className="border-b p-2">
-                              {key}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
-                          <tr key={rowIndex}>
-                            {Object.keys(exchange.result!.rows[0]).map(key => (
-                              <td key={key} className="border-b p-2">
-                                {String(row[key] ?? "")}
-                              </td>
+              {exchange.error && (
+                <p role="alert" className="text-red-600 dark:text-red-400">
+                  {exchange.error}
+                </p>
+              )}
+              {exchange.result && (
+                <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
+                  <div className="space-y-3 leading-relaxed break-words">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p>{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+                        h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
+                        h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
+                        a: ({ children, href }) => (
+                          <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
+                            {children}
+                          </a>
+                        ),
+                        code: ({ children }) => (
+                          <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+                            {children}
+                          </pre>
+                        ),
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-xs">{children}</table>
+                          </div>
+                        ),
+                        th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
+                        td: ({ children }) => <td className="border p-2">{children}</td>,
+                      }}
+                    >
+                      {exchange.result.summary || t("Analyzing…")}
+                    </ReactMarkdown>
+                  </div>
+                  <ResultChart rows={exchange.result.rows} />
+                  {exchange.result.rows.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr>
+                            {Object.keys(exchange.result.rows[0]).map(key => (
+                              <th key={key} className="border-b p-2">
+                                {key}
+                              </th>
                             ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <p className="mt-2 text-neutral-500 dark:text-neutral-400">
-                      {t("Showing {shown} of {count} rows", {
-                        shown: String(Math.min(10, exchange.result.rows.length)),
-                        count: String(exchange.result.rowCount),
-                      })}
-                    </p>
-                  </div>
-                )}
-                <details className="text-xs">
-                  <summary className="cursor-pointer">{t("View SQL")}</summary>
-                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">
-                    {exchange.result.query}
-                  </pre>
-                </details>
-              </div>
-            )}
-            {!exchange.error && !exchange.result && <p className="text-neutral-500">{t("Analyzing…")}</p>}
-          </div>
-        ))}
+                        </thead>
+                        <tbody>
+                          {exchange.result.rows.slice(0, 10).map((row, rowIndex) => (
+                            <tr key={rowIndex}>
+                              {Object.keys(exchange.result!.rows[0]).map(key => (
+                                <td key={key} className="border-b p-2">
+                                  {String(row[key] ?? "")}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="mt-2 text-neutral-500 dark:text-neutral-400">
+                        {t("Showing {shown} of {count} rows", {
+                          shown: String(Math.min(10, exchange.result.rows.length)),
+                          count: String(exchange.result.rowCount),
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer">{t("View SQL")}</summary>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded bg-neutral-100 p-3 dark:bg-neutral-850">
+                      {exchange.result.query}
+                    </pre>
+                  </details>
+                </div>
+              )}
+              {!exchange.error && !exchange.result && <p className="text-neutral-500">{t("Analyzing…")}</p>}
+            </div>
+          ))}
+        </div>
       </div>
-      <form onSubmit={submit} className="flex gap-2 border-t border-neutral-150 p-3 dark:border-neutral-850">
-        <input
-          className="min-w-0 flex-1 rounded-lg border border-neutral-150 bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:border-neutral-800"
+      <form onSubmit={submit} className="flex gap-2 border-t border-neutral-150 p-3 dark:border-neutral-850 md:px-6">
+        <textarea
+          rows={2}
+          className="min-w-0 flex-1 resize-none rounded-lg border border-neutral-150 bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:border-neutral-800"
           aria-label={t("Ask about your analytics")}
           placeholder={t("Ask about your analytics")}
           value={question}

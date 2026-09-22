@@ -24,13 +24,14 @@ it("restores a saved conversation and can start a new one without deleting the o
     {
       question: "Visits?",
       query: "SELECT count() FROM scoped_events",
-      summary: "Saved answer",
+      summary: "Saved **answer**",
       rows: [{ visits: 4 }],
       rowCount: 1,
     },
   ]);
   render(<AnalystPanel organizationId="org-1" siteId={42} />);
-  expect(await screen.findByText("Saved answer")).toBeTruthy();
+  expect(await screen.findByText("answer")).toBeTruthy();
+  expect(screen.getByText("answer").tagName).toBe("STRONG");
   expect(mocks.get).toHaveBeenCalledWith("org-1", 42, "saved-1", expect.any(AbortSignal));
 
   vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -39,6 +40,6 @@ it("restores a saved conversation and can start a new one without deleting the o
   vi.restoreAllMocks();
 
   fireEvent.change(screen.getByRole("combobox", { name: "Conversation history" }), { target: { value: "" } });
-  expect(screen.queryByText("Saved answer")).toBeNull();
+  expect(screen.queryByText("answer")).toBeNull();
   expect(screen.getByRole("option", { name: "Visits?" })).toBeTruthy();
 });
