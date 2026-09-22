@@ -34,6 +34,18 @@ describe("callOpenRouter", () => {
     );
   });
 
+  it("uses the configured proxy URL and reasoning effort", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("OPENROUTER_API_URL", "http://10.10.10.55:8317/v1/chat/completions");
+    vi.stubEnv("OPENROUTER_REASONING_EFFORT", "medium");
+    mockOpenRouterResponse({ choices: [{ message: { content: "ok" } }] });
+
+    await callOpenRouter([{ role: "user", content: "hello" }]);
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("http://10.10.10.55:8317/v1/chat/completions");
+    expect(JSON.parse(String(init?.body)).reasoning_effort).toBe("medium");
+  });
+
   it("rejects null assistant content", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     mockOpenRouterResponse({

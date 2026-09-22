@@ -106,7 +106,7 @@ describe("analyzeQuery", () => {
         summary: "Four visits",
       })
     );
-    expect(JSON.parse(lines.at(-1)!.slice(6)).conversationId).toBe("e8dfdb2e-8159-4d51-a56d-22404613da4e");
+    expect(JSON.parse(lines[lines.length - 1].slice(6)).conversationId).toBe("e8dfdb2e-8159-4d51-a56d-22404613da4e");
     expect(raw.end).toHaveBeenCalledOnce();
   });
 

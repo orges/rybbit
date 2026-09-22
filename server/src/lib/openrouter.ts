@@ -168,7 +168,7 @@ async function requestOpenRouter(
   const apiKey = process.env.OPENROUTER_API_KEY;
   const model = getOpenRouterModel(options?.model);
   if (!apiKey) throw new OpenRouterError("missing_api_key", "OPENROUTER_API_KEY is not configured", { model });
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(process.env.OPENROUTER_API_URL || OPENROUTER_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -181,6 +181,9 @@ async function requestOpenRouter(
       messages,
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? 1000,
+      ...(process.env.OPENROUTER_REASONING_EFFORT
+        ? { reasoning_effort: process.env.OPENROUTER_REASONING_EFFORT }
+        : {}),
       ...(stream ? { stream: true } : {}),
     }),
     signal: options?.signal,
