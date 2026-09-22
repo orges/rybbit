@@ -41,6 +41,13 @@ export function AnalystPanel({
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const followBottomRef = useRef(true);
+
+  useEffect(() => {
+    const pane = messagesRef.current;
+    if (pane && followBottomRef.current) pane.scrollTop = pane.scrollHeight;
+  }, [exchanges, loadingHistory]);
 
   useEffect(
     () => () => {
@@ -52,6 +59,7 @@ export function AnalystPanel({
   useEffect(() => {
     abortRef.current?.abort();
     historyAbortRef.current?.abort();
+    followBottomRef.current = true;
     setExchanges([]);
     setChatSearch("");
     setConversations([]);
@@ -89,6 +97,7 @@ export function AnalystPanel({
 
   const selectConversation = async (id: string) => {
     historyAbortRef.current?.abort();
+    followBottomRef.current = true;
     setHistoryError(null);
     setConversationId(id || null);
     setExchanges([]);
@@ -131,6 +140,7 @@ export function AnalystPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
+    followBottomRef.current = true;
     setQuestion("");
     setHistoryError(null);
     setBusy(true);
@@ -274,7 +284,16 @@ export function AnalystPanel({
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 md:p-6" aria-live="polite">
+        <div
+          ref={messagesRef}
+          data-testid="analyst-messages"
+          onScroll={event => {
+            const pane = event.currentTarget;
+            followBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120;
+          }}
+          className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 md:p-6"
+          aria-live="polite"
+        >
           <div className="mx-auto max-w-4xl space-y-8">
             {historyError && (
               <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -299,43 +318,46 @@ export function AnalystPanel({
                 )}
                 {exchange.result && (
                   <div className="space-y-4 border-t border-neutral-150 pt-4 dark:border-neutral-850">
-                    <div className="space-y-3 leading-relaxed break-words">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ children }) => <p>{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
-                          h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
-                          h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
-                          a: ({ children, href }) => (
-                            <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
-                              {children}
-                            </a>
-                          ),
-                          code: ({ children }) => (
-                            <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
-                              {children}
-                            </code>
-                          ),
-                          pre: ({ children }) => (
-                            <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
-                              {children}
-                            </pre>
-                          ),
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto">
-                              <table className="w-full border-collapse text-xs">{children}</table>
-                            </div>
-                          ),
-                          th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
-                          td: ({ children }) => <td className="border p-2">{children}</td>,
-                        }}
-                      >
-                        {parseAnalysisSummary(exchange.result.summary).text || t("Analyzing…")}
-                      </ReactMarkdown>
-                    </div>
+                    {(parseAnalysisSummary(exchange.result.summary).display !== "table" ||
+                      exchange.result.rows.length === 0) && (
+                      <div className="space-y-3 leading-relaxed break-words">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p>{children}</p>,
+                            ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+                            h1: ({ children }) => <h1 className="text-lg font-semibold">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-base font-semibold">{children}</h2>,
+                            h3: ({ children }) => <h3 className="font-semibold">{children}</h3>,
+                            a: ({ children, href }) => (
+                              <a href={href} className="underline" target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            ),
+                            code: ({ children }) => (
+                              <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800">
+                                {children}
+                              </code>
+                            ),
+                            pre: ({ children }) => (
+                              <pre className="overflow-x-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+                                {children}
+                              </pre>
+                            ),
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto">
+                                <table className="w-full border-collapse text-xs">{children}</table>
+                              </div>
+                            ),
+                            th: ({ children }) => <th className="border p-2 text-left">{children}</th>,
+                            td: ({ children }) => <td className="border p-2">{children}</td>,
+                          }}
+                        >
+                          {parseAnalysisSummary(exchange.result.summary).text || t("Analyzing…")}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                     <ResultChart
                       rows={exchange.result.rows}
                       rowCount={exchange.result.rowCount}

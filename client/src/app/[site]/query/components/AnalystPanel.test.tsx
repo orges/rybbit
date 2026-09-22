@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), remove: vi.fn(), generate: vi.fn(), analyze: vi.fn() }));
@@ -43,7 +43,7 @@ it("restores a saved conversation and can start a new one without deleting the o
     {
       question: "Visits?",
       query: "SELECT count() FROM scoped_events",
-      summary: "[display:table]\nSaved **answer**",
+      summary: "[display:none]\nSaved **answer**",
       rows: [{ visits: 4 }],
       rowCount: 1,
     },
@@ -62,4 +62,64 @@ it("restores a saved conversation and can start a new one without deleting the o
   fireEvent.click(screen.getByRole("button", { name: "New chat" }));
   expect(screen.queryByText("answer")).toBeNull();
   expect(screen.getByRole("option", { name: "Visits?" })).toBeTruthy();
+});
+
+it("shows a chosen table only once and follows incoming messages until the reader scrolls away", async () => {
+  mocks.list.mockResolvedValue([{ id: "saved-1", title: "Errors", updatedAt: "2026-09-22" }]);
+  let resolveMessages!: (value: unknown[]) => void;
+  mocks.get.mockReturnValue(
+    new Promise(resolve => {
+      resolveMessages = resolve;
+    })
+  );
+  render(<AnalystPanel organizationId="org-1" siteId={42} />);
+  const pane = screen.getByTestId("analyst-messages");
+  Object.defineProperty(pane, "scrollHeight", { configurable: true, value: 600 });
+  Object.defineProperty(pane, "clientHeight", { configurable: true, value: 200 });
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledOnce());
+  resolveMessages([
+    {
+      question: "List errors",
+      query: "SELECT name, count() FROM scoped_events GROUP BY name",
+      summary: "[display:table]\nErrors: **Load failed** (22 occurrences)",
+      rows: [{ name: "Load failed", occurrences: 22 }],
+      rowCount: 1,
+    },
+  ]);
+  expect(await screen.findByRole("cell", { name: "Load failed" })).toBeTruthy();
+  expect(screen.queryByText(/Errors: /)).toBeNull();
+  await waitFor(() => expect(pane.scrollTop).toBe(600));
+
+  mocks.generate.mockResolvedValue({ query: "SELECT count() FROM scoped_events" });
+  let update!: (result: { query: string; summary: string; rows: []; rowCount: number }) => void;
+  let finish!: (result: { query: string; summary: string; rows: []; rowCount: number }) => void;
+  mocks.analyze.mockImplementation((_org, _request, _signal, onProgress) => {
+    update = onProgress;
+    onProgress({ query: "SELECT count() FROM scoped_events", summary: "[display:none]\nDone", rows: [], rowCount: 0 });
+    return new Promise(resolve => {
+      finish = resolve;
+    });
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Ask about your analytics" }), {
+    target: { value: "Follow-up" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  await screen.findByText("Done");
+  expect(pane.scrollTop).toBe(600);
+
+  fireEvent.scroll(pane, { target: { scrollTop: 0 } });
+  update({
+    query: "SELECT count() FROM scoped_events",
+    summary: "[display:none]\nMore details",
+    rows: [],
+    rowCount: 0,
+  });
+  expect(await screen.findByText("More details")).toBeTruthy();
+  expect(pane.scrollTop).toBe(0);
+  finish({
+    query: "SELECT count() FROM scoped_events",
+    summary: "[display:none]\nMore details",
+    rows: [],
+    rowCount: 0,
+  });
 });
