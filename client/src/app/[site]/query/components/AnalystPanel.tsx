@@ -17,7 +17,7 @@ import {
 } from "../../../../api/analytics/endpoints/customQuery";
 import { Button } from "../../../../components/ui/button";
 import { getErrorMessage, isAbortError } from "../utils";
-import { ResultChart } from "./ResultChart";
+import { ResultChart, SeriesChart } from "./ResultChart";
 
 type Exchange = { question: string; result?: AnalyzeQueryResponse; error?: string };
 
@@ -372,11 +372,15 @@ export function AnalystPanel({
                         return (
                           <div className="space-y-2">
                             <h3 className="font-medium">{artifact.title}</h3>
-                            <ResultChart
-                              rows={artifact.points.map(point => ({ label: point.label, value: point.value }))}
-                              rowCount={artifact.points.length}
-                              display={artifact.chartType}
-                            />
+                            {artifact.points[0]?.series !== undefined ? (
+                              <SeriesChart points={artifact.points} title={artifact.title} />
+                            ) : (
+                              <ResultChart
+                                rows={artifact.points.map(point => ({ label: point.label, value: point.value }))}
+                                rowCount={artifact.points.length}
+                                display={artifact.chartType}
+                              />
+                            )}
                           </div>
                         );
                       if (artifact.type === "form")

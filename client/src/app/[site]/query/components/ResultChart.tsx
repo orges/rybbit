@@ -72,6 +72,57 @@ export function chartData(
   return null;
 }
 
+export function SeriesChart({
+  points,
+  title,
+}: {
+  points: { label: string; value: number; series?: string }[];
+  title: string;
+}) {
+  const theme = useNivoTheme();
+  const labels = [...new Set(points.map(point => point.label))].sort((a, b) =>
+    /^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) - Number(b) : a.localeCompare(b)
+  );
+  const series = [...new Set(points.map(point => point.series ?? ""))];
+  const values = new Map(points.map(point => [`${point.series}\u0000${point.label}`, point.value]));
+  return (
+    <div
+      className="h-96 rounded-lg border border-neutral-150 p-3 dark:border-neutral-850"
+      role="img"
+      aria-label={title}
+    >
+      <ResponsiveLine
+        data={series.map(id => ({
+          id,
+          data: labels.flatMap(label => {
+            const value = values.get(`${id}\u0000${label}`);
+            return value === undefined ? [] : [{ x: label, y: value }];
+          }),
+        }))}
+        xScale={{ type: "point" }}
+        yScale={{ type: "linear", min: 0, max: "auto" }}
+        margin={{ top: 20, right: 140, bottom: 65, left: 65 }}
+        axisBottom={{ tickRotation: -35, tickValues: Math.min(labels.length, 8) }}
+        colors={colors}
+        theme={theme}
+        enablePoints={false}
+        useMesh
+        animate={false}
+        legends={[
+          {
+            anchor: "bottom-right",
+            direction: "column",
+            translateX: 130,
+            itemWidth: 120,
+            itemHeight: 18,
+            symbolSize: 8,
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function ResultChart({
   rows,
   rowCount,

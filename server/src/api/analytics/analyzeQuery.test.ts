@@ -18,7 +18,7 @@ vi.mock("../../lib/openrouter.js", async importOriginal => ({
 }));
 vi.mock("./aiConversations.js", () => ({ canReadConversation, saveAiExchange }));
 
-import { analyzeQuery } from "./analyzeQuery.js";
+import { analyzeQuery, runPresentationTool } from "./analyzeQuery.js";
 import { generateCustomQuery } from "./generateCustomQuery.js";
 import { executeScopedQuery } from "./runCustomQuery.js";
 
@@ -43,6 +43,30 @@ describe("executeScopedQuery", () => {
 });
 
 describe("analyzeQuery", () => {
+  it("charts all 191 rows across repeated hours and distinct page series", () => {
+    const rows = Array.from({ length: 191 }, (_, index) => ({
+      hour: index % 24,
+      pathname: `/watch/${Math.floor(index / 24)}`,
+      pageviews: index + 1,
+    }));
+    const artifact = runPresentationTool(
+      "render_chart",
+      JSON.stringify({
+        title: "Hourly pageviews",
+        type: "line",
+        dimension: "hour",
+        metric: "pageviews",
+        series: "pathname",
+      }),
+      rows
+    );
+    expect(artifact.type).toBe("chart");
+    if (artifact.type === "chart") {
+      expect(artifact.points).toHaveLength(191);
+      expect(artifact.points[190]).toEqual({ label: "22", value: 191, series: "/watch/7" });
+    }
+  });
+
   it("denies inaccessible sites without querying analytics or the model", async () => {
     getSitesUserHasAccessTo.mockResolvedValue([{ organizationId: "org-1", siteId: 42 }]);
     query.mockReset();

@@ -43,7 +43,12 @@ export type AiConversation = { id: string; title: string; updatedAt: string };
 export type AnalysisDisplay = "none" | "table" | "bar" | "line" | "donut";
 export type AnalysisArtifact =
   | { type: "table"; title: string; columns: string[]; rows: string[][] }
-  | { type: "chart"; title: string; chartType: "bar" | "line" | "donut"; points: { label: string; value: number }[] }
+  | {
+      type: "chart";
+      title: string;
+      chartType: "bar" | "line" | "donut";
+      points: { label: string; value: number; series?: string }[];
+    }
   | { type: "form"; question: string; options: string[] };
 
 export function parseAnalysisSummary(summary: string): {
