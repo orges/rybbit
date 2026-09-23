@@ -62,6 +62,7 @@ describe("analyzeQuery", () => {
     );
     expect(artifact.type).toBe("chart");
     if (artifact.type === "chart") {
+      expect(artifact.metric).toBe("pageviews");
       expect(artifact.points).toHaveLength(191);
       expect(artifact.points[190]).toEqual({ label: "22", value: 191, series: "/watch/7" });
     }

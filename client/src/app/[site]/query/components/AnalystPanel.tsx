@@ -373,7 +373,7 @@ export function AnalystPanel({
                           <div className="space-y-2">
                             <h3 className="font-medium">{artifact.title}</h3>
                             {artifact.points[0]?.series !== undefined ? (
-                              <SeriesChart points={artifact.points} title={artifact.title} />
+                              <SeriesChart points={artifact.points} title={artifact.title} metric={artifact.metric} />
                             ) : (
                               <ResultChart
                                 rows={artifact.points.map(point => ({ label: point.label, value: point.value }))}

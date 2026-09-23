@@ -75,10 +75,13 @@ export function chartData(
 export function SeriesChart({
   points,
   title,
+  metric,
 }: {
   points: { label: string; value: number; series?: string }[];
   title: string;
+  metric?: string;
 }) {
+  const t = useExtracted();
   const theme = useNivoTheme();
   const labels = [...new Set(points.map(point => point.label))].sort((a, b) =>
     /^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) - Number(b) : a.localeCompare(b)
@@ -107,6 +110,15 @@ export function SeriesChart({
         theme={theme}
         enablePoints={false}
         useMesh
+        tooltip={({ point }) => (
+          <div className="max-w-80 rounded-lg border border-neutral-150 bg-white p-3 text-xs shadow-md dark:border-neutral-750 dark:bg-neutral-850">
+            <div className="break-all font-medium">{String(point.seriesId)}</div>
+            <div className="mt-1 text-neutral-600 dark:text-neutral-300">{String(point.data.xFormatted)}</div>
+            <div className="mt-1 font-semibold">
+              {metric ? chartLabel(metric) : t("Count")}: {Number(point.data.y).toLocaleString()}
+            </div>
+          </div>
+        )}
         animate={false}
         legends={[
           {

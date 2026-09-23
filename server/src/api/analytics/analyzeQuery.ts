@@ -144,7 +144,7 @@ export function runPresentationTool(name: string, args: string, rows: Record<str
       throw new Error("Chart needs numeric values and distinct labels (at most 12 series)");
     if (chart.type === "donut" && (points.some(point => point.value < 0) || !points.some(point => point.value > 0)))
       throw new Error("Donut chart needs nonnegative values");
-    return { type: "chart" as const, title: chart.title, chartType: chart.type, points };
+    return { type: "chart" as const, title: chart.title, chartType: chart.type, metric: chart.metric, points };
   }
   throw new Error("Unknown presentation tool");
 }

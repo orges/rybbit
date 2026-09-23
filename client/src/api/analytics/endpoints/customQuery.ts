@@ -47,6 +47,7 @@ export type AnalysisArtifact =
       type: "chart";
       title: string;
       chartType: "bar" | "line" | "donut";
+      metric?: string;
       points: { label: string; value: number; series?: string }[];
     }
   | { type: "form"; question: string; options: string[] };
