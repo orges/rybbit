@@ -284,7 +284,9 @@ function summarize(record: ToolCallRecord) {
   }
   const parts: string[] = [];
   for (const [key, value] of Object.entries(parsed)) {
-    if (key === "result_id" || value == null) continue;
+    // result_id and follow_ups are for the model, not the reader: the first is
+    // plumbing, the second is the whole payload of a list the reader can see.
+    if (key === "result_id" || key === "follow_ups" || value == null) continue;
     if (typeof value === "number" || typeof value === "boolean") parts.push(`${key}: ${value}`);
     else if (typeof value === "string" && value.length <= 48) parts.push(`${key}: ${value}`);
     else if (Array.isArray(value)) {
