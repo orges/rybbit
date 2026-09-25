@@ -233,7 +233,10 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             }}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
           >
-            <div className="mx-auto max-w-3xl space-y-7 pb-4">
+            {/* The thread runs wider than a comfortable reading measure, and the
+                prose inside it stays at one — so a chart or a table has the room
+                to be a chart instead of a thumbnail in a column of text. */}
+            <div className="mx-auto max-w-5xl space-y-7 pb-4">
               {messages.length === 0 ? (
                 <EmptyState onPick={setDraft} />
               ) : (

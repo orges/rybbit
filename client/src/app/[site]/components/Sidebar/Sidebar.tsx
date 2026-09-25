@@ -12,9 +12,9 @@ import {
   LayoutDashboard,
   LayoutGrid,
   MousePointerClick,
-  MessageSquareText,
   Rewind,
   Settings,
+  Sparkles,
   Split,
   Target,
   User,
@@ -149,7 +149,7 @@ function SidebarContent() {
             label={t("Ask")}
             active={isActiveTab("ask")}
             href={getTabPath("ask")}
-            icon={<MessageSquareText className="w-4 h-4" />}
+            icon={<Sparkles className="w-4 h-4" />}
           />
         )}
         <div className="hidden md:block">

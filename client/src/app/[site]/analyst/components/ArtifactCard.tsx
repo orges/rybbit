@@ -18,7 +18,7 @@ import { SESSION_COLUMN, TIMESTAMP_COLUMN, asUtcIso, type ResultLink } from "./l
  * rest of the product uses, for free and by construction.
  */
 
-const CHART_HEIGHT = 260;
+const CHART_HEIGHT = 300;
 
 type ChartArtifact = Extract<AnalystArtifact, { type: "chart" }>;
 
@@ -97,7 +97,7 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
   };
   return (
     <div className="space-y-1.5">
-      <div className="max-h-96 overflow-auto rounded-lg border border-neutral-150 dark:border-neutral-800">
+      <div className="max-h-[28rem] overflow-auto rounded-lg border border-neutral-150 dark:border-neutral-800">
         <Table>
           <TableHeader>
             <TableRow>
