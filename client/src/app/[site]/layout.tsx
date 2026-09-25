@@ -63,7 +63,11 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
           </div>
         )}
-        <div className="flex-1 overflow-auto">
+        {/* The analyst owns its own scrolling: the thread pane scrolls and the
+            composer stays pinned. Letting this scroller scroll as well meant that
+            in a short window the panel ran off the bottom edge with its composer
+            below the fold. */}
+        <div className={isAnalyst ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 overflow-auto"}>
           <div className={isAnalyst ? "flex h-full min-h-0 flex-col" : "min-h-full flex flex-col"}>
             {/* <div className="px-4 py-2 max-w-[1400px] mx-auto w-full mb-4"> */}
             <Header />

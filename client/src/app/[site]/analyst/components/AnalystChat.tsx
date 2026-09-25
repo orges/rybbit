@@ -180,7 +180,9 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
     // A small even inset, like every other page here. Removing the padding
     // entirely ran the panel off the bottom and right edges, which reads as
     // broken rather than full-bleed.
-    <div className="flex h-full min-h-0 w-full p-2 md:p-3">
+    // A small even inset, like every other page here, and never taller or wider
+    // than the window: the thread scrolls inside, the panel does not.
+    <div className="flex h-full min-h-0 w-full overflow-hidden p-2 md:p-3">
       <section
         className="relative flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
         aria-label={t("Ask")}
