@@ -143,6 +143,17 @@ export const dashboards = pgTable("dashboards", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
 
+/**
+ * AI analyst chat.
+ *
+ * Conversations are owned by the user who started them and scoped to one Site,
+ * so a shared login sees its own threads and never another team's. Messages are
+ * stored as one row per turn with the run's tool calls, artifacts and usage in
+ * `parts`: the transcript is what has to replay, and keeping the tool trace
+ * beside the prose is what lets the UI rebuild an answer instead of re-querying.
+ * Tool *output* is deliberately not stored — only the small artifact the user
+ * actually saw.
+ */
 export const aiConversations = pgTable(
   "ai_conversations",
   {
@@ -166,18 +177,66 @@ export const aiConversations = pgTable(
 export const aiMessages = pgTable(
   "ai_messages",
   {
-    id: serial("id").primaryKey(),
+    id: uuid("id").primaryKey().defaultRandom(),
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => aiConversations.id, { onDelete: "cascade" }),
-    question: text("question").notNull(),
-    query: text("query").notNull(),
-    summary: text("summary").notNull(),
-    rows: jsonb("rows").notNull().$type<Record<string, unknown>[]>().default([]),
-    rowCount: integer("row_count").notNull(),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: text("content").notNull().default(""),
+    parts: jsonb("parts").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
   },
-  table => [index("ai_messages_conversation_id_idx").on(table.conversationId, table.id)]
+  table => [index("ai_messages_conversation_idx").on(table.conversationId, table.createdAt)]
+);
+
+export const aiRuns = pgTable(
+  "ai_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => aiMessages.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    status: text("status").$type<"completed" | "stopped" | "error">().notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    durationMs: integer("duration_ms").notNull().default(0),
+    steps: integer("steps").notNull().default(0),
+    error: text("error"),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  },
+  table => [index("ai_runs_conversation_idx").on(table.conversationId, table.createdAt)]
+);
+
+/** Project memory: durable notes the team gives the analyst about this Site. */
+export const aiMemories = pgTable(
+  "ai_memories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    siteId: integer("site_id")
+      .notNull()
+      .references(() => sites.siteId, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  },
+  table => [index("ai_memories_site_idx").on(table.siteId, table.createdAt)]
+);
+
+export const aiFeedback = pgTable(
+  "ai_feedback",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => aiMessages.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  }
 );
 
 // Timeline annotations: a note pinned to a date (or range) on the traffic chart.

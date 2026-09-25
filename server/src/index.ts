@@ -22,8 +22,10 @@ import {
   updateAdminSubscriptionOverride,
 } from "./api/admin/index.js";
 import {
-  analyzeQuery,
-  handleAiConversations,
+  analystChat,
+  handleConversations,
+  handleFeedback,
+  handleMemories,
   createAnnotation,
   createDashboard,
   createSegment,
@@ -514,21 +516,30 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     generateCustomQuery
   );
   fastify.post(
-    "/organizations/:organizationId/analytics/query/analyze",
+    "/organizations/:organizationId/analytics/chat",
     withRateLimit(orgSqlRead, generateQueryRateLimit),
-    analyzeQuery
+    analystChat
   );
-  fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleAiConversations);
+  fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleConversations);
   fastify.get(
     "/organizations/:organizationId/analytics/conversations/:conversationId",
     orgSqlRead,
-    handleAiConversations
+    handleConversations
+  );
+  fastify.patch(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleConversations
   );
   fastify.delete(
     "/organizations/:organizationId/analytics/conversations/:conversationId",
     orgSqlRead,
-    handleAiConversations
+    handleConversations
   );
+  fastify.post("/organizations/:organizationId/analytics/feedback", orgSqlRead, handleFeedback);
+  fastify.get("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
+  fastify.post("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
+  fastify.delete("/organizations/:organizationId/analytics/memories/:memoryId", orgSqlRead, handleMemories);
   fastify.get("/sites/:siteId/performance/overview", publicAnalyticsRead, getPerformanceOverview);
   fastify.get("/sites/:siteId/performance/time-series", publicAnalyticsRead, getPerformanceTimeSeries);
   fastify.get("/sites/:siteId/performance/by-dimension", publicAnalyticsRead, getPerformanceByDimension);
