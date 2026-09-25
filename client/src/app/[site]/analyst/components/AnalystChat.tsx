@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, MessageSquareText, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, MessageSquareText, Sparkles } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
@@ -177,7 +177,9 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   };
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] p-2 md:p-4">
+    // Full-bleed. The 1400px cap left a wide monitor with a column of chat
+    // floating in the middle of it, which is the emptiest this page can look.
+    <div className="flex h-full min-h-0 w-full p-2 md:p-4">
       <section
         className="relative flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
         aria-label={t("Ask")}
@@ -233,10 +235,10 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             }}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
           >
-            {/* The thread runs wider than a comfortable reading measure, and the
-                prose inside it stays at one — so a chart or a table has the room
-                to be a chart instead of a thumbnail in a column of text. */}
-            <div className="mx-auto max-w-5xl space-y-7 pb-4">
+            {/* Prose holds a reading measure and centres in the pane; artifacts
+                are allowed to run to the full width of it, so a chart is a chart
+                rather than a thumbnail, and a table is a table. */}
+            <div className="mx-auto max-w-6xl space-y-7 pb-4">
               {messages.length === 0 ? (
                 <EmptyState onPick={setDraft} />
               ) : (
@@ -299,10 +301,13 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
 function EmptyState({ onPick }: { onPick: (value: string) => void }) {
   const t = useExtracted();
   return (
-    <div className="flex min-h-[60vh] flex-col items-start justify-center gap-6">
-      <div className="space-y-1.5">
-        <h2 className="text-lg font-semibold">{t("Ask your analytics")}</h2>
-        <p className="max-w-xl text-sm text-neutral-500 dark:text-neutral-400">
+    // Fills the pane rather than sitting in the top third of it, and uses the
+    // full thread width: four suggestions in two columns across 1024px, not four
+    // short cards marooned in the left half.
+    <div className="flex min-h-[calc(100dvh-14rem)] flex-col justify-center gap-8">
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">{t("Ask your analytics")}</h2>
+        <p className="max-w-2xl text-sm text-neutral-500 dark:text-neutral-400">
           {t("Ask about this site and get an answer from the data: trends, pages, events, errors, retention or replays.")}
         </p>
       </div>
@@ -312,8 +317,9 @@ function EmptyState({ onPick }: { onPick: (value: string) => void }) {
             key={example}
             type="button"
             onClick={() => onPick(example)}
-            className="rounded-lg border border-neutral-150 px-3 py-2.5 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-850 dark:text-neutral-200 dark:hover:border-neutral-700 dark:hover:bg-neutral-800"
+            className="flex items-center gap-2.5 rounded-lg border border-neutral-150 px-3.5 py-3 text-left text-sm text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-850 dark:text-neutral-200 dark:hover:border-neutral-700 dark:hover:bg-neutral-800"
           >
+            <ArrowUp className="size-3.5 shrink-0 text-neutral-300 dark:text-neutral-600" />
             {example}
           </button>
         ))}

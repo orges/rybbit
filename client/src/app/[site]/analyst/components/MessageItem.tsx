@@ -137,7 +137,7 @@ export function MessageItem({
   if (message.role === "user") {
     return (
       <div className="group flex flex-col items-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-lg rounded-br-sm bg-neutral-100 px-3 py-2 text-sm sm:max-w-2xl dark:bg-neutral-800">
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-lg rounded-br-sm bg-neutral-100 px-3 py-2 text-sm sm:max-w-2xl lg:max-w-3xl dark:bg-neutral-800">
           {message.content}
         </div>
         <div className="flex items-center gap-1">

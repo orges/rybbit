@@ -69,7 +69,7 @@ export function ChatComposer({
   return (
     <form onSubmit={submit} className="border-t border-neutral-150 bg-white px-3 py-3 dark:border-neutral-850 dark:bg-neutral-900 md:px-4">
       {editing && (
-        <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-2 text-[11px] text-neutral-500 sm:max-w-4xl dark:text-neutral-400">
+        <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-2 text-[11px] text-neutral-500 sm:max-w-4xl lg:max-w-5xl dark:text-neutral-400">
           <PencilLine className="size-3" />
           <span>{t("Editing question — sending replaces it and every answer after it")}</span>
           <button type="button" onClick={onCancelEdit} className="ml-auto underline underline-offset-2 hover:text-neutral-700 dark:hover:text-neutral-200">
@@ -77,7 +77,7 @@ export function ChatComposer({
           </button>
         </div>
       )}
-      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-neutral-150 bg-white px-2 py-1.5 focus-within:ring-1 focus-within:ring-neutral-400 sm:max-w-4xl dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-neutral-150 bg-white px-2 py-1.5 focus-within:ring-1 focus-within:ring-neutral-400 sm:max-w-4xl lg:max-w-5xl dark:border-neutral-800 dark:bg-neutral-950">
         <textarea
           ref={ref}
           rows={1}
