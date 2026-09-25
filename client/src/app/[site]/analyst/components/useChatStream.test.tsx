@@ -131,3 +131,18 @@ describe("useChatStream", () => {
     expect(result.current.messages.map(message => message.content)).toEqual(["count sessions", "second"]);
   });
 });
+
+describe("answer verification", () => {
+  it("marks figures the stream reported as unverified", async () => {
+    emit([
+      { type: "text_delta", text: "Sessions were 19,048 and users were 21,904." },
+      { type: "unverified", figures: ["21,904"] },
+      { type: "done", stopped: false, steps: 1 },
+    ]);
+    const { result } = renderStream();
+    await act(async () => {
+      await result.current.send("how many users?");
+    });
+    expect(lastAssistant(result.current.messages)).toMatchObject({ unverified: ["21,904"] });
+  });
+});

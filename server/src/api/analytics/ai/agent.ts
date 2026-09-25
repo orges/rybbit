@@ -9,6 +9,7 @@ import {
 import { ANALYST_TOOL_SCHEMAS, buildSystemPrompt, type AnalystContext } from "./prompt.js";
 import { ALL_TOOLS, ResultStore, type Artifact } from "./presentation.js";
 import { toolFailure, type ToolContext } from "./tools.js";
+import { unsupportedFigures } from "./verify.js";
 
 /**
  * The analyst's tool loop.
@@ -33,6 +34,7 @@ export type AgentEvent =
   | { type: "artifact"; artifact: Artifact }
   | { type: "usage"; usage: OpenRouterUsage; model: string }
   | { type: "title"; title: string }
+  | { type: "unverified"; figures: string[] }
   | { type: "message_id"; messageId: string }
   | { type: "done"; stopped: boolean; steps: number }
   | { type: "error"; message: string; retryable: boolean };
@@ -56,6 +58,8 @@ export interface AgentResult {
   model: string;
   steps: number;
   stopped: boolean;
+  /** Figures in the answer that no tool result contained. */
+  unverified: string[];
   error?: string;
 }
 
@@ -89,6 +93,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     model: getModelChain()[0],
     steps: 0,
     stopped: false,
+    unverified: [],
   };
 
   for (let step = 1; step <= MAX_STEPS; step++) {
@@ -222,6 +227,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       result.text += `\n\n_Stopped after ${MAX_STEPS} steps without a final answer. Rephrase the question to get a focused answer._`;
     }
   }
+
+  // The answer is only as trustworthy as the numbers in it. Anything that does
+  // not appear in a tool result is surfaced rather than passed off as data.
+  result.unverified = unsupportedFigures(result.text, result.toolCalls.map(record => record.output));
+  if (result.unverified.length) emit({ type: "unverified", figures: result.unverified });
 
   emit({ type: "done", stopped: result.stopped, steps: result.steps });
   return result;

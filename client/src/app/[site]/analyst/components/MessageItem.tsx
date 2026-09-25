@@ -157,6 +157,7 @@ export function MessageItem({
           {message.error}
         </p>
       )}
+      {message.unverified?.length ? <UnverifiedFigures figures={message.unverified} /> : null}
       {message.pending && !hasContent && !message.toolCalls?.length && <ThinkingDots />}
       {message.stopped && <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{t("Stopped")}</p>}
       {hasContent && !message.pending && <MessageActions message={message} onRetry={onRetry} onFeedback={onFeedback} />}
@@ -167,6 +168,32 @@ export function MessageItem({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A number in the answer that no tool returned. It may be a rounding, a
+ * transposition, or arithmetic the model did itself — the point is the reader
+ * should look before they quote it.
+ */
+function UnverifiedFigures({ figures }: { figures: string[] }) {
+  const t = useExtracted();
+  return (
+    <details className="rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-1.5 text-xs">
+      <summary className="cursor-pointer text-amber-600 dark:text-amber-400">
+        {t("{count} figures in this answer are not in the tool results", { count: String(figures.length) })}
+      </summary>
+      <p className="mt-1.5 text-neutral-600 dark:text-neutral-300">
+        {t("Check these before quoting them — they may be rounded or mis-copied:")}
+      </p>
+      <ul className="mt-1 flex flex-wrap gap-1">
+        {figures.map(figure => (
+          <li key={figure} className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[11px]">
+            {figure}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

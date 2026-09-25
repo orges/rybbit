@@ -133,6 +133,11 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
           case "title":
             onConversation?.(conversationId ?? "", event.title);
             break;
+          case "unverified":
+            setMessages(current =>
+              patchMessage(current, assistantId, message => ({ ...message, unverified: event.figures }))
+            );
+            break;
           case "message_id":
             assistantIdRef.current = event.messageId;
             setMessages(current => patchMessage(current, assistantId, message => ({ ...message, id: event.messageId })));
@@ -189,6 +194,7 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
         ...(message.artifacts
           ? { artifacts: message.artifacts.filter((artifact, index, all) => all.findIndex(other => JSON.stringify(other) === JSON.stringify(artifact)) === index) }
           : {}),
+        ...(message.unverified?.length ? { unverified: [...new Set(message.unverified)] } : {}),
       }))
     );
     setConversationId(id);

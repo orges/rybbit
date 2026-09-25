@@ -49,6 +49,8 @@ export interface ChatMessage {
   model?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   stopped?: boolean;
+  /** Figures in the answer that no tool result contained. */
+  unverified?: string[];
   pending?: boolean;
   error?: string;
   rating?: number;
@@ -65,6 +67,7 @@ export type ChatStreamEvent =
   | { type: "artifact"; artifact: AnalystArtifact }
   | { type: "usage"; usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
   | { type: "title"; title: string }
+  | { type: "unverified"; figures: string[] }
   | { type: "message_id"; messageId: string }
   | { type: "done"; stopped: boolean; steps: number }
   | { type: "error"; message: string; retryable: boolean };

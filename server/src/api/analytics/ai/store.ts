@@ -21,6 +21,7 @@ export interface AssistantParts {
   steps?: number;
   stopped?: boolean;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+  unverified?: string[];
 }
 
 export interface UserParts {
@@ -224,6 +225,7 @@ export function toClientMessage(row: {
     ...(parts.usage ? { usage: parts.usage } : {}),
     ...(parts.model ? { model: parts.model } : {}),
     ...(parts.stopped ? { stopped: parts.stopped } : {}),
+    ...(parts.unverified?.length ? { unverified: parts.unverified } : {}),
   };
 }
 /** Removes the trailing assistant turn so a retry can replace it. */

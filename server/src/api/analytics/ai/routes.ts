@@ -179,6 +179,7 @@ export async function analystChat(
         steps: result.steps,
         stopped: result.stopped,
         usage: result.usage,
+        unverified: result.unverified,
       },
     });
     await store.recordRun({
