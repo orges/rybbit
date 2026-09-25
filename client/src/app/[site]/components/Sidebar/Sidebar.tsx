@@ -147,8 +147,8 @@ function SidebarContent() {
         {!embed && !privateKey && (IS_CLOUD || DEPLOYMENT) && (
           <SidebarComponents.Item
             label={t("Ask")}
-            active={isActiveTab("analyst")}
-            href={getTabPath("analyst")}
+            active={isActiveTab("ask")}
+            href={getTabPath("ask")}
             icon={<MessageSquareText className="w-4 h-4" />}
           />
         )}

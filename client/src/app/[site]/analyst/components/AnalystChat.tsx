@@ -223,6 +223,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
                     message={message}
                     onRetry={() => retry(message)}
                     onFeedback={rating => void feedback(message, rating)}
+                    siteId={siteId}
                     onFollowup={value => {
                       setDraft(value);
                       composerRef.current?.focus();

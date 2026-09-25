@@ -7,6 +7,7 @@ import type { ChatMessage, MessageContext } from "@/api/analyst/endpoints/analys
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArtifactCard } from "./ArtifactCard";
+import { resultLink } from "./links";
 import { Markdown } from "./Markdown";
 import { ToolActivity } from "./ToolActivity";
 
@@ -111,12 +112,20 @@ export function MessageItem({
   onRetry,
   onFeedback,
   onFollowup,
+  siteId,
 }: {
   message: ChatMessage;
   onRetry: () => void;
   onFeedback: (rating: number) => void;
   onFollowup: (value: string) => void;
+  siteId: number;
 }) {
+  // Each artifact was produced by a tool call, and the tool knows which page of
+  // the product owns that data.
+  const linkFor = (artifact: unknown) => {
+    const call = message.toolCalls?.find(entry => entry.artifact && JSON.stringify(entry.artifact) === JSON.stringify(artifact));
+    return call ? resultLink(call.name, call.input, siteId) : null;
+  };
   const t = useExtracted();
 
   if (message.role === "user") {
@@ -136,7 +145,7 @@ export function MessageItem({
       <ToolActivity reasoning={message.reasoning} toolCalls={message.toolCalls} running={message.pending && !hasContent} />
       {hasContent && <Markdown>{message.content}</Markdown>}
       {(message.artifacts ?? []).map((artifact, index) => (
-        <ArtifactCard key={index} artifact={artifact} onFollowup={onFollowup} />
+        <ArtifactCard key={index} artifact={artifact} onFollowup={onFollowup} link={linkFor(artifact)} siteId={siteId} />
       ))}
       {message.error && (
         <p role="alert" className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400">

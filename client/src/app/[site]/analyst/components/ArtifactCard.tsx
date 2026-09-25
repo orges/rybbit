@@ -6,6 +6,7 @@ import { DashboardBarChart } from "@/app/[site]/dashboards/components/charts/Das
 import { DashboardLineChart } from "@/app/[site]/dashboards/components/charts/DashboardLineChart";
 import { DashboardPie } from "@/app/[site]/dashboards/components/charts/DashboardPie";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SESSION_COLUMN, type ResultLink } from "./links";
 
 /**
  * Rendered results.
@@ -77,7 +78,8 @@ function formatCell(value: string) {
   return Number.isInteger(parsed) ? parsed.toLocaleString() : parsed.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function ArtifactTable({ artifact }: { artifact: Extract<AnalystArtifact, { type: "table" }> }) {
+function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact, { type: "table" }>; siteId: number }) {
+  const sessionColumn = artifact.columns.indexOf(SESSION_COLUMN);
   return (
     <div className="space-y-1.5">
       <div className="max-h-96 overflow-auto rounded-lg border border-neutral-150 dark:border-neutral-800">
@@ -96,7 +98,18 @@ function ArtifactTable({ artifact }: { artifact: Extract<AnalystArtifact, { type
               <TableRow key={rowIndex}>
                 {row.map((cell, cellIndex) => (
                   <TableCell key={cellIndex} className="max-w-80 truncate font-mono text-xs tabular-nums" title={cell}>
-                    {formatCell(cell)}
+                    {cellIndex === sessionColumn && cell ? (
+                      <a
+                        href={`/${siteId}/replay?session=${encodeURIComponent(cell)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-dataviz"
+                      >
+                        {formatCell(cell)}
+                      </a>
+                    ) : (
+                      formatCell(cell)
+                    )}
                   </TableCell>
                 ))}
               </TableRow>
@@ -133,7 +146,17 @@ function Followups({ artifact, onPick }: { artifact: Extract<AnalystArtifact, { 
   );
 }
 
-export function ArtifactCard({ artifact, onFollowup }: { artifact: AnalystArtifact; onFollowup?: (value: string) => void }) {
+export function ArtifactCard({
+  artifact,
+  onFollowup,
+  link,
+  siteId,
+}: {
+  artifact: AnalystArtifact;
+  onFollowup?: (value: string) => void;
+  link?: ResultLink;
+  siteId: number;
+}) {
   if (artifact.type === "followups" && onFollowup) {
     return <Followups artifact={artifact} onPick={onFollowup} />;
   }
@@ -149,11 +172,23 @@ export function ArtifactCard({ artifact, onFollowup }: { artifact: AnalystArtifa
   }
   return (
     <figure className="space-y-2 rounded-lg border border-neutral-150 bg-white p-3 dark:border-neutral-850 dark:bg-neutral-900">
-      <figcaption className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{artifact.title}</figcaption>
+      <figcaption className="flex items-baseline gap-2">
+        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{artifact.title}</span>
+        {link && (
+          <a
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto shrink-0 text-[11px] text-neutral-500 underline-offset-2 hover:text-dataviz hover:underline dark:text-neutral-400"
+          >
+            {`Open in ${link.label}`}
+          </a>
+        )}
+      </figcaption>
       {artifact.type === "chart" ? (
         <Chart artifact={artifact} />
       ) : artifact.type === "table" ? (
-        <ArtifactTable artifact={artifact} />
+        <ArtifactTable artifact={artifact} siteId={siteId} />
       ) : null}
     </figure>
   );
