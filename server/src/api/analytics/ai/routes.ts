@@ -7,11 +7,12 @@ import { sites } from "../../../db/postgres/schema.js";
 import { eq } from "drizzle-orm";
 import { getSitesUserHasAccessTo } from "../../../lib/auth-utils.js";
 import { filterSchema } from "../utils/query-validation.js";
-import { OpenRouterError, streamChat, type OpenRouterMessage } from "../../../lib/openrouter.js";
+import { OpenRouterError, type OpenRouterMessage } from "../../../lib/openrouter.js";
 import { isRetryableAgentError, runAgent, type AgentEvent } from "./agent.js";
 import { ANALYST_EXAMPLE_PROMPTS } from "./prompt.js";
 import { resolveToolRange, type ResolvedRange } from "./time.js";
 import * as store from "./store.js";
+import { deriveTitle } from "./title.js";
 
 /**
  * HTTP surface of the analyst.
@@ -101,7 +102,7 @@ export async function analystChat(
       userId,
       organizationId,
       siteId,
-      title: message.slice(0, 100),
+      title: deriveTitle(message),
     });
 
     // A retry replaces the previous answer rather than stacking a second one on
@@ -192,12 +193,10 @@ export async function analystChat(
       ...(result.error ? { error: result.error } : {}),
     });
 
-    if (isNew && !result.stopped) {
-      const title = await generateTitle(message, result.text);
-      if (title) {
-        await store.renameConversation(conversation.id, title);
-        send({ type: "title", title });
-      }
+    if (isNew) {
+      const title = deriveTitle(message);
+      await store.renameConversation(conversation.id, title);
+      send({ type: "title", title });
     }
     send({ type: "message_id", messageId: assistant.id });
     send({ type: "done", stopped: result.stopped, steps: result.steps });
@@ -227,31 +226,6 @@ export async function analystChat(
   } finally {
     request.raw.off("aborted", onClose);
     reply.raw.off("close", onClose);
-  }
-}
-
-/** A short, human title for the thread, so the history list is scannable. */
-async function generateTitle(question: string, answer: string) {
-  try {
-    let title = "";
-    for await (const event of streamChat({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You write thread titles. Reply with 3 to 6 words, no punctuation at the end, no quotes, describing what the user asked. Example: Top pages by bounce rate",
-        },
-        { role: "user", content: `Question: ${question.slice(0, 300)}\nAnswer: ${answer.slice(0, 300)}` },
-      ],
-      maxTokens: 24,
-      temperature: 0.2,
-    })) {
-      if (event.type === "text") title += event.text;
-    }
-    const cleaned = title.replace(/^["'`*#\s]+|["'`*#.\s]+$/g, "").trim();
-    return cleaned.length >= 3 && cleaned.length <= 80 ? cleaned : undefined;
-  } catch {
-    return undefined;
   }
 }
 

@@ -60,6 +60,13 @@ function Chart({ artifact }: { artifact: ChartArtifact }) {
   );
 }
 
+/** Query results come back as raw values; the rest of Rybbit shows grouped numbers. */
+function formatCell(value: string) {
+  if (!/^-?\d+(\.\d+)?$/.test(value)) return value;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed.toLocaleString() : parsed.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 function ArtifactTable({ artifact }: { artifact: Extract<AnalystArtifact, { type: "table" }> }) {
   return (
     <div className="space-y-1.5">
@@ -78,8 +85,8 @@ function ArtifactTable({ artifact }: { artifact: Extract<AnalystArtifact, { type
             {artifact.rows.map((row, rowIndex) => (
               <TableRow key={rowIndex}>
                 {row.map((cell, cellIndex) => (
-                  <TableCell key={cellIndex} className="max-w-80 truncate font-mono text-xs" title={cell}>
-                    {cell}
+                  <TableCell key={cellIndex} className="max-w-80 truncate font-mono text-xs tabular-nums" title={cell}>
+                    {formatCell(cell)}
                   </TableCell>
                 ))}
               </TableRow>
