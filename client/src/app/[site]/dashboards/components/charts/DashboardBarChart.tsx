@@ -8,12 +8,14 @@ import { createPortal } from "react-dom";
 import type { CustomQueryRow } from "@/api/analytics/endpoints";
 import { useStore } from "@/lib/store";
 import { formatter } from "@/lib/utils";
-import { buildChartAxis, buildWideData } from "../../utils";
+import { buildChartAxis, buildWideData, inferChartBucket } from "../../utils";
 import { CardLegend, ChartEmpty, DashboardTooltip, toCardSeries } from "./shared";
 
 type DashboardBarChartProps = {
   rows: CustomQueryRow[];
   mapping: DashboardCardMapping;
+  /** The data carries its own time range rather than being a view of the dashboard's. */
+  standalone?: boolean;
 };
 
 const MARGIN = { top: 10, right: 15, bottom: 30, left: 40 };
@@ -27,12 +29,16 @@ function topRoundedRect(x: number, y: number, width: number, height: number, rad
   return `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} L${x + width},${y + height} Z`;
 }
 
-export function DashboardBarChart({ rows, mapping }: DashboardBarChartProps) {
-  const bucket = useStore(state => state.bucket);
+export function DashboardBarChart({ rows, mapping, standalone = false }: DashboardBarChartProps) {
+  const storeBucket = useStore(state => state.bucket);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
   const wide = useMemo(() => buildWideData(rows, mapping), [rows, mapping]);
+  const bucket = useMemo(
+    () => (standalone ? inferChartBucket(wide ? wide.data.map(entry => String(entry[wide.indexBy])) : []) : storeBucket),
+    [standalone, storeBucket, wide]
+  );
   const axis = useMemo(
     () => buildChartAxis(wide ? wide.data.map(entry => String(entry[wide.indexBy])) : [], bucket),
     [wide, bucket]

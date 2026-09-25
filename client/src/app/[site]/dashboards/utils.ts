@@ -169,8 +169,7 @@ export function parseChartDate(value: unknown): DateTime | null {
 }
 
 /** Luxon format string per bucket, mirroring TimeSeriesChart's tick formatting. */
-function bucketTickFormat(bucket: TimeBucket): string {
-  switch (bucket) {
+function bucketTickFormat(bucket: TimeBucket): string {  switch (bucket) {
     case "minute":
     case "five_minutes":
     case "ten_minutes":
@@ -201,6 +200,39 @@ export type ChartAxis = {
   format: (value: unknown) => string;
   tickValues: string[] | undefined;
 };
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The bucket a set of bucket labels was actually produced at.
+ *
+ * A dashboard card always knows its bucket — it is the one the query used. Data
+ * that arrives without one (an analyst chart, an export) has to be read off the
+ * values: "2026-09-19" is a day, an hour-spanning range is hourly, anything
+ * longer is a day. Guessing from the viewer's own time selector instead is how a
+ * fortnight of daily points ends up drawn on a single 12AM–10PM axis.
+ */
+export function inferChartBucket(values: string[]): TimeBucket {
+  const sample = values.find(value => value !== "" && value != null);
+  if (!sample) return "day";
+  if (DATE_ONLY.test(sample)) return "day";
+  const first = parseChartDate(sample);
+  const last = parseChartDate(values.filter(value => value !== "" && value != null).at(-1) ?? sample);
+  if (!first || !last) return "day";
+  // The gap between neighbouring points, not the total span: two days of hourly
+  // data and two points a day apart are told apart by the step, not the range.
+  const distinct = values.filter(value => value !== "" && value != null);
+  const stepHours = Math.abs(last.diff(first, "hours").hours) / Math.max(distinct.length - 1, 1);
+  if (stepHours <= 1 / 60 + 0.01) return "minute";
+  if (stepHours <= 5 / 60 + 0.01) return "five_minutes";
+  if (stepHours <= 10 / 60 + 0.01) return "ten_minutes";
+  if (stepHours <= 15 / 60 + 0.01) return "fifteen_minutes";
+  if (stepHours <= 1.5) return "hour";
+  if (stepHours <= 36) return "day";
+  if (stepHours <= 24 * 10) return "week";
+  if (stepHours <= 24 * 200) return "month";
+  return "year";
+}
 
 /**
  * Build an axis tick formatter + thinned tick set for the X column. Datetime
