@@ -137,6 +137,7 @@ services:
       - OPENROUTER_MODEL=${OPENROUTER_MODEL}
       - OPENROUTER_API_URL=${OPENROUTER_API_URL:-}
       - OPENROUTER_REASONING_EFFORT=${OPENROUTER_REASONING_EFFORT:-}
+      - OPENROUTER_FALLBACK_MODELS=${OPENROUTER_FALLBACK_MODELS:-}
     depends_on:
       clickhouse:
         condition: service_healthy

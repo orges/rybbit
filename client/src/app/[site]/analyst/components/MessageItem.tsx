@@ -2,7 +2,7 @@
 
 import { CalendarDays, Copy, Filter, Globe, RefreshCw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
 import { useExtracted } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ChatMessage, MessageContext } from "@/api/analyst/endpoints/analyst";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ import { ToolActivity } from "./ToolActivity";
 function ContextChips({ context }: { context?: MessageContext }) {
   if (!context) return null;
   const t = useExtracted();
-  const chips: Array<{ icon: React.ReactNode; label: string }> = [];
+  const chips: Array<{ icon: ReactNode; label: string }> = [];
   if (context.rangeLabel || context.startDate) {
     chips.push({
       icon: <CalendarDays className="size-3" />,
