@@ -236,9 +236,10 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
           >
             {/* Prose holds a reading measure and centres in the pane; artifacts
-                are allowed to run to the full width of it, so a chart is a chart
-                rather than a thumbnail, and a table is a table. */}
-            <div className="mx-auto max-w-6xl space-y-7 pb-4">
+                run to the full width of it, so a chart is a chart rather than a
+                thumbnail. The cap is generous enough to only bite on a very wide
+                monitor, where some margin is better than 2000px line lengths. */}
+            <div className="mx-auto w-full max-w-[100rem] space-y-7 px-2 pb-4 lg:px-6">
               {messages.length === 0 ? (
                 <EmptyState onPick={setDraft} />
               ) : (
@@ -302,8 +303,8 @@ function EmptyState({ onPick }: { onPick: (value: string) => void }) {
   const t = useExtracted();
   return (
     // Fills the pane rather than sitting in the top third of it, and uses the
-    // full thread width: four suggestions in two columns across 1024px, not four
-    // short cards marooned in the left half.
+    // full thread width: four suggestions in two columns across the pane, not
+    // four short cards marooned in the left half.
     <div className="flex min-h-[calc(100dvh-14rem)] flex-col justify-center gap-8">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{t("Ask your analytics")}</h2>
