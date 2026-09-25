@@ -6,7 +6,7 @@ import { useSetPageTitle } from "../../../hooks/useSetPageTitle";
 import { AnalystChat } from "./components/AnalystChat";
 
 export default function AnalystPage() {
-  useSetPageTitle("AI analyst");
+  useSetPageTitle("Ask");
   const { site } = useParams<{ site: string }>();
   const siteId = Number(site);
   const { data } = useGetSite(siteId);

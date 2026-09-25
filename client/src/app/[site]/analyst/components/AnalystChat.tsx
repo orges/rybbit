@@ -162,7 +162,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] p-2 md:p-4">
       <section
         className="relative flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
-        aria-label={t("AI analyst")}
+        aria-label={t("Ask")}
       >
         <ConversationRail
           className={railOpen ? "absolute inset-y-0 left-0 z-20 flex shadow-lg" : "hidden"}
@@ -198,7 +198,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
               <MessageSquareText className="size-4" />
             </Button>
             <Sparkles className="hidden size-4 text-neutral-400 sm:block" />
-            <h1 className="text-sm font-medium">{t("AI analyst")}</h1>
+            <h1 className="text-sm font-medium">{t("Ask")}</h1>
             <span className="ml-auto text-[11px] text-neutral-500 dark:text-neutral-400">
               {context.startDate ? `${context.startDate} → ${context.endDate}` : t("All time")}
             </span>
@@ -273,7 +273,7 @@ function EmptyState({ onPick }: { onPick: (value: string) => void }) {
       <div className="space-y-1.5">
         <h2 className="text-lg font-semibold">{t("Ask your analytics")}</h2>
         <p className="max-w-xl text-sm text-neutral-500 dark:text-neutral-400">
-          {t("The analyst reads this site and answers with the data. Ask about trends, pages, events, errors, retention or replays.")}
+          {t("Ask about this site and get an answer from the data: trends, pages, events, errors, retention or replays.")}
         </p>
       </div>
       <div className="grid w-full gap-2 sm:grid-cols-2">

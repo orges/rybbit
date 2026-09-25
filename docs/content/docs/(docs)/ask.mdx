@@ -1,9 +1,9 @@
 ---
-title: AI analyst
+title: Ask
 description: Ask questions about your analytics in plain language and get answers grounded in your data
 ---
 
-The AI analyst is a chat inside Rybbit that reads your data and answers questions about it. Open it from **Product Analytics → AI analyst** in the sidebar.
+Ask is a chat inside Rybbit that reads your data and answers questions about it. Open it from **Product Analytics → Ask** in the sidebar.
 
 It is not a generic chatbot with your numbers pasted in. Every figure it shows comes from a tool call against the Site you are asking about, and the call is shown to you: the question, the arguments, how long it took and what came back. If it cannot see something, it tells you instead of guessing.
 
@@ -11,7 +11,7 @@ It is not a generic chatbot with your numbers pasted in. Every figure it shows c
 
 Type a question in the composer and press Enter (Shift+Enter for a new line). Threads are saved per user and per Site, so you can start an investigation, leave it, and pick it up later from the rail on the left.
 
-The analyst understands the range you are looking at. Ask while the dashboard is on "Last 7 days" and "how are we trending" means the last 7 days. When you name a period yourself — "yesterday", "last week", "the 30th" — it uses that instead, including in a Site's timezone.
+Ask understands the range you are looking at. Ask while the dashboard is on "Last 7 days" and "how are we trending" means the last 7 days. When you name a period yourself — "yesterday", "last week", "the 30th" — it uses that instead, including in a Site's timezone.
 
 Filters in the dashboard apply to the question too, and the answer records which filters were in effect, so a surprising number can always be traced back to the view it came from.
 
@@ -28,7 +28,7 @@ It can also write SQL when no structured tool fits, over a read-only view of you
 
 ## What it shows
 
-Answers arrive as you watch them being written, with the model's reasoning and every tool call listed above the text. Tables and charts are rendered from the query results, not described: pick the column that labels each point and the number to plot, and the analyst draws it with the same charts as the rest of Rybbit.
+Answers arrive as you watch them being written, with the model's reasoning and every tool call listed above the text. Tables and charts are rendered from the query results, not described: pick the column that labels each point and the number to plot, and the chart is drawn with the same components as the rest of Rybbit.
 
 Under each answer you can copy it, retry it with the same question, and rate it. Retrying replaces the previous answer rather than adding a second one.
 
@@ -44,7 +44,7 @@ Run `/usage` in any thread to see how many tokens that conversation has used.
 
 ## Configuration
 
-The analyst is off until an OpenAI-compatible chat completions endpoint is configured. Set these in `.env` and restart:
+Ask is off until an OpenAI-compatible chat completions endpoint is configured. Set these in `.env` and restart:
 
 ```bash
 # Any OpenAI-compatible endpoint. Leave OPENROUTER_API_URL unset to use OpenRouter.
@@ -60,4 +60,4 @@ The model needs tool calling and streaming. Every answer costs tokens and a few 
 
 ## Safety
 
-The analyst is read-only. It cannot create dashboards, change goals or flags, or modify anything — if you ask, it will say so. It only ever sees Sites your user already has access to, and the custom SQL it can run is restricted to a read-only view of those Sites with a row cap and a time limit.
+Ask is read-only. It cannot create dashboards, change goals or flags, or modify anything — if you ask, it will say so. It only ever sees Sites your user already has access to, and the custom SQL it can run is restricted to a read-only view of those Sites with a row cap and a time limit.

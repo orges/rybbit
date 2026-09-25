@@ -146,7 +146,7 @@ function SidebarContent() {
         <SidebarComponents.SectionHeader>{t("Product Analytics")}</SidebarComponents.SectionHeader>
         {!embed && !privateKey && (IS_CLOUD || DEPLOYMENT) && (
           <SidebarComponents.Item
-            label={t("AI analyst")}
+            label={t("Ask")}
             active={isActiveTab("analyst")}
             href={getTabPath("analyst")}
             icon={<MessageSquareText className="w-4 h-4" />}

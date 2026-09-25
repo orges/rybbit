@@ -20,7 +20,8 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { setSiteContext, site, privateKey } = useStore();
   const { embed, hideSidebar } = useEmbedPageOptions();
-  const isAnalyst = getSiteRouteContext(pathname).route === "analyst";
+  // "ask" is the name of the feature; "analyst" stays valid so an old link still lands on it.
+  const isAnalyst = ["ask", "analyst"].includes(getSiteRouteContext(pathname).route ?? "");
 
   // Sync store state with URL parameters
   useSyncStateWithUrl();
