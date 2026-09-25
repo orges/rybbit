@@ -5,7 +5,9 @@ description: Ask questions about your analytics in plain language and get answer
 
 Ask is a chat inside Rybbit that reads your data and answers questions about it. Open it from **Product Analytics → Ask** in the sidebar.
 
-It is not a generic chatbot with your numbers pasted in. Every figure it shows comes from a tool call against the Site you are asking about, and the call is shown to you: the question, the arguments, how long it took and what came back. If it cannot see something, it tells you instead of guessing.
+It is not a generic chatbot with your numbers pasted in. Every figure it shows comes from a tool call against the Site you are asking about, and the call is shown to you: what was asked, how long it took and what came back. If it cannot see something, it tells you instead of guessing.
+
+Goals are part of that. Ask about a target — "am I on track for the signup goal?" — and it reads the goals configured on the Site, their conversion rate over the range, and whether that rate is rising or falling. Goals hold a condition rather than a number, so it reports the rate and the direction, and never claims a goal is met.
 
 ## Asking questions
 
@@ -23,6 +25,7 @@ Questions it can answer well:
 - "Where did we lose people in the signup funnel?"
 - "Show me sessions where people hit a 500 error, longest first."
 - "What is our day-7 retention?"
+- "How are my goals doing, and which one is falling?"
 
 It can also write SQL when no structured tool fits, over a read-only view of your own events.
 
