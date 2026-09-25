@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, Sparkles } from "lucide-react";
+import { ArrowDown, MessageSquareText, Sparkles } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
@@ -46,6 +46,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
 
   const [draft, setDraft] = useState("");
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
   const [follow, setFollow] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -160,23 +161,43 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] p-2 md:p-4">
       <section
-        className="flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
+        className="relative flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
         aria-label={t("AI analyst")}
       >
         <ConversationRail
+          className={railOpen ? "absolute inset-y-0 left-0 z-20 flex shadow-lg" : "hidden"}
           conversations={conversations.data ?? []}
           activeId={conversationId}
           loading={conversations.isLoading}
           collapsed={railCollapsed}
-          onToggle={() => setRailCollapsed(value => !value)}
-          onSelect={id => void loadConversation(id)}
-          onNew={() => void loadConversation(null)}
+          onToggle={() => {
+            setRailOpen(false);
+            setRailCollapsed(value => !value);
+          }}
+          onSelect={id => {
+            setRailOpen(false);
+            void loadConversation(id);
+          }}
+          onNew={() => {
+            setRailOpen(false);
+            void loadConversation(null);
+          }}
           onDelete={deleteThread}
           onRename={(id, title) => renameConversation.mutate({ id, title })}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b border-neutral-150 px-4 py-2.5 dark:border-neutral-850">
-            <Sparkles className="size-4 text-neutral-400" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="smIcon"
+              className="md:hidden"
+              aria-label={t("Chat history")}
+              onClick={() => setRailOpen(true)}
+            >
+              <MessageSquareText className="size-4" />
+            </Button>
+            <Sparkles className="hidden size-4 text-neutral-400 sm:block" />
             <h1 className="text-sm font-medium">{t("AI analyst")}</h1>
             <span className="ml-auto text-[11px] text-neutral-500 dark:text-neutral-400">
               {context.startDate ? `${context.startDate} → ${context.endDate}` : t("All time")}
