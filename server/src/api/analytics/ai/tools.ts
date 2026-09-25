@@ -685,7 +685,9 @@ async function goalTrend(
     const window = Math.max(1, Math.round(rates.length / 3));
     const early = average(rates.slice(0, window));
     const late = average(rates.slice(-window));
-    if (!early || !late) continue;
+    // Only a zero baseline is unusable. A goal that stopped converting entirely
+    // is late = 0, and "down 100%" is exactly what someone needs to hear.
+    if (!early) continue;
     const delta = Math.round(((late - early) / early) * 1000) / 10;
     if (!Number.isFinite(delta) || Math.abs(delta) < 1) continue;
     movement.set(goal.goalId, `${delta > 0 ? "up" : "down"} ${Math.abs(delta)}%`);
