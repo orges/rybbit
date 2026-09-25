@@ -481,29 +481,24 @@ const getFunnel: AnalystTool = {
 
 const getJourneys: AnalystTool = {
   name: "get_journeys",
-  description: "The most common sequences of pages and events inside a session, ranked by how many sessions took them.",
+  description: "The most common sequences of pages inside a session, ranked by how many sessions took them.",
   parameters: {
     type: "object",
     properties: {
-      steps: { type: "array", items: { type: "string" }, description: "Optional page paths or event names that must appear" },
-      limit: { type: "integer", minimum: 1, maximum: 20 },
+      max_steps: { type: "integer", minimum: 2, maximum: 10, description: "Longest path to consider. Defaults to 3" },
+      limit: { type: "integer", minimum: 1, maximum: 100, description: "How many distinct paths to return. Defaults to 10" },
       time: timeShape,
     },
   },
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
-    const steps = z.array(z.string().min(1).max(500)).max(10).safeParse(args.steps ?? []);
-    const rows = await runAnalyticsQuery<ToolRow>({
-      query: buildJourneysQuery(
-        {
-          ...baseParams(ctx, range),
-          steps: steps.success ? steps.data.join(",") : "",
-          limit: String(Math.min(Number(args.limit ?? 5), 20)),
-        },
-        ctx.siteId,
-        {}
-      ),
-      params: { siteId: ctx.siteId },
+    // Path length and how many paths to return; the dashboard defaults are 3 and
+    // 100, and the builder binds both.
+    const maxSteps = Math.min(Math.max(Number(args.max_steps ?? 3), 2), 10);
+    const journeyLimit = Math.min(Math.max(Number(args.limit ?? 10), 1), 100);
+    const rows = await runAnalyticsQuery<{ journey: string[]; sessions_count: number; percentage: number }>({
+      query: buildJourneysQuery({ ...baseParams(ctx, range), steps: String(maxSteps) }, ctx.siteId, {}),
+      params: { siteId: ctx.siteId, maxSteps, journeyLimit },
     });
     return { text: JSON.stringify({ range: range.label, count: rows.length, journeys: rows.slice(0, 5) }), rows, preview: { limit: 20 } };
   },

@@ -6,6 +6,7 @@ import { db } from "../../../db/postgres/postgres.js";
 import { sites } from "../../../db/postgres/schema.js";
 import { eq } from "drizzle-orm";
 import { getSitesUserHasAccessTo } from "../../../lib/auth-utils.js";
+import { filterSchema } from "../utils/query-validation.js";
 import { OpenRouterError, streamChat, type OpenRouterMessage } from "../../../lib/openrouter.js";
 import { isRetryableAgentError, runAgent, type AgentEvent } from "./agent.js";
 import { ANALYST_EXAMPLE_PROMPTS } from "./prompt.js";
@@ -20,12 +21,8 @@ import * as store from "./store.js";
  * into the next prompt.
  */
 
-const filterSchema = z.object({
-  parameter: z.string().max(64),
-  value: z.array(z.union([z.string().max(500), z.number()])).max(50),
-  type: z.string().max(32),
-});
-
+// The dashboard's own filter validator, reused so the chat can never introduce
+// a filter shape the analytics endpoints would reject later.
 const chatBodySchema = z.object({
   siteId: z.number().int().positive(),
   message: z.string().trim().min(1).max(4000),
@@ -50,17 +47,14 @@ const conversationParams = z.object({
 });
 const siteQuery = z.object({ siteId: z.coerce.number().int().positive() });
 
-type SiteAccess = { siteId: number; organizationId: string };
-
 /**
  * Resolves the caller's access to the Site the question is about. Every route
  * starts here: a conversation id is only ever acted on after this succeeds, so
  * there is no path that reaches another user's threads.
  */
 async function authorize(request: FastifyRequest, organizationId: string, siteId: number): Promise<boolean> {
-  const userId = request.user?.id;
-  if (!userId) return false;
-  const accessible: SiteAccess[] = (await getSitesUserHasAccessTo(request)) as SiteAccess[];
+  if (!request.user?.id) return false;
+  const accessible = await getSitesUserHasAccessTo(request);
   return accessible.some(site => site.organizationId === organizationId && site.siteId === siteId);
 }
 
@@ -154,7 +148,7 @@ export async function analystChat(
         rangeLabel: range.label,
         startDate: range.startDate,
         endDate: range.endDate,
-        filters: context.filters as never,
+        filters: context.filters,
         page: context.page,
         stat: context.stat,
         memories,
@@ -165,7 +159,7 @@ export async function analystChat(
         siteIds: [siteId],
         timezone,
         defaultRange: resolveToolRange(undefined, range, timezone),
-        filters: context.filters as never,
+        filters: context.filters,
         signal: abort.signal,
       },
       emit: send,
