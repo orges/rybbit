@@ -206,7 +206,9 @@ const showChart: AnalystTool = {
       source: result.source,
     };
     return {
-      text: `Chart "${title}" shown: ${points.length} points from ${result.source}.`,
+      // Not "chart shown" — the model reads that back and narrates it. The
+      // highest point is the thing the answer should open with.
+      text: `Plotted ${points.length} points from ${result.source}. Highest: ${describeLeader(points)}.`,
       artifact,
     };
   },
@@ -273,7 +275,7 @@ const showTable: AnalystTool = {
       ...(result.range ? { range: result.range } : {}),
       source: result.source,
     };
-    return { text: `Table "${title}" shown: ${Math.min(take, rows.length)} of ${rows.length} rows from ${result.source}.`, artifact };
+    return { text: `Showing ${Math.min(take, rows.length)} of ${rows.length} rows from ${result.source}.`, artifact };
   },
 };
 
@@ -289,6 +291,24 @@ const noSuchResult = (id: string) =>
   new Error(`No result ${id}. Use one of the result ids from the tools you already called.`);
 const noSuchColumns = (id: string, missing: string[], available: string[]) =>
   new Error(`Result ${id} is missing ${missing.join(" and ")}. Available columns: ${available.join(", ")}`);
+
+const grouped = (value: number) =>
+  value.toLocaleString("en-US", { maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0 });
+
+/** The point an answer should open with: the largest one, and how big it is. */
+function describeLeader(points: Array<{ label: string; value: number; series?: string }>) {
+  const best = [...points].sort((left, right) => right.value - left.value)[0];
+  if (!best) return "none";
+  return `${best.label} (${grouped(best.value)}${best.series ? ` of ${best.series}` : ""})`;
+}
+
+function describeFunnel(results: Array<{ step_name: string; sessions: number; conversion_rate: number }>) {
+  const first = results[0];
+  const last = results[results.length - 1];
+  if (!first || !last) return "";
+  const conversion = first.sessions > 0 ? Math.round((last.sessions / first.sessions) * 1000) / 10 : 0;
+  return `${grouped(first.sessions)} sessions entered at ${first.step_name}, ${grouped(last.sessions)} reached ${last.step_name} — ${conversion}% overall.`;
+}
 
 const resultOf = (id: string, ctx: { results: ResultStore }) => {
   const result = ctx.results.get(id);
@@ -343,7 +363,8 @@ const showRetention: AnalystTool = {
         },
       ])
     );
-    const mode = (result.input as { mode?: string } | undefined)?.mode === "week" ? "week" : "day";
+    const mode = (result.input as { mode?: string } | undefined)?.mode === "week" ? "week" : "day";    const largest = Object.entries(cohorts).sort((a, b) => b[1].size - a[1].size)[0];
+    const largestCohort = largest ? `${largest[0]} (${grouped(largest[1].size)} users)` : "none";
     const artifact: Artifact = {
       type: "retention",
       title: parsed.data.title,
@@ -353,7 +374,7 @@ const showRetention: AnalystTool = {
       source: result.source,
     };
     return {
-      text: `Retention "${parsed.data.title}" shown: ${newestFirst.length} cohorts over up to ${artifact.maxPeriods} periods from ${result.source}.`,
+      text: `Drew ${newestFirst.length} cohorts over up to ${artifact.maxPeriods} periods from ${result.source}. Largest cohort: ${largestCohort}.`,
       artifact,
     };
   },
@@ -407,7 +428,9 @@ const showFunnel: AnalystTool = {
       source: result.source,
     };
     return {
-      text: `Funnel "${parsed.data.title}" shown: ${results.length} steps from ${result.source}.`,
+      // The first and last step are the whole point of a funnel, so hand those
+      // over rather than a count the model will narrate.
+      text: `Drew ${results.length} steps from ${result.source}. ${describeFunnel(results)}.`,
       artifact,
     };
   },
@@ -431,7 +454,9 @@ const suggestFollowups: AnalystTool = {
       .safeParse(args);
     if (!parsed.success) throw new Error("Give a title and 2 to 4 questions of a few words each");
     return {
-      text: `Follow-up suggestions shown: ${parsed.data.options.join(" | ")}`,
+      // The questions are rendered under the answer. Echoing them back only
+      // gives the model something to repeat.
+      text: `Recorded ${parsed.data.options.length} follow-up questions.`,
       artifact: { type: "followups", title: parsed.data.title, options: parsed.data.options },
     };
   },

@@ -91,6 +91,20 @@ describe("show_chart", () => {
     });
   });
 
+  it("hands the model the highest point instead of an announcement to repeat", async () => {
+    const { store, resultId } = storeWith([
+      { value: "/", pageviews: 17764 },
+      { value: "/search", pageviews: 23772 },
+    ]);
+    const output = await run(
+      "show_chart",
+      { result_id: resultId, title: "Top pages", type: "bar", dimension: "value", metric: "pageviews" },
+      store
+    );
+    expect(output.text).toContain("Highest: /search (23,772)");
+    expect(output.text).not.toContain("shown");
+  });
+
   it("orders a bar chart by the value it plots, so the chart matches the ranking above it", async () => {
     const { store, resultId } = storeWith([
       { value: "/", pageviews: 17764 },
@@ -268,6 +282,8 @@ describe("show_funnel", () => {
     });
     const output = await run("show_funnel", { result_id: stored!.id, title: "Signup funnel" }, store);
 
+    expect(output.text).toContain("100 sessions entered at /");
+    expect(output.text).toContain("40 reached /pricing");
     expect(output.artifact).toMatchObject({
       type: "funnel",
       steps: [{ type: "page", value: "/" }, { type: "event", value: "demo_request" }],
