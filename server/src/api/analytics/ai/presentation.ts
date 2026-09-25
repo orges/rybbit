@@ -106,6 +106,20 @@ const showChart: AnalystTool = {
       value: Number(row[metric]),
       ...(series ? { series: String(row[series] ?? "").slice(0, 120) } : {}),
     }));
+    if (type === "line" || type === "area") {
+      // Categories have no place on a time axis, and plotting them anyway draws
+      // the points against a synthetic 2000-01-01 domain that reads like a real
+      // trend. A bar chart is the honest visual for a ranked list.
+      const unparseable = points
+        .map(point => point.label)
+        .filter(label => !/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/.test(label))
+        .slice(0, 3);
+      if (unparseable.length) {
+        throw new Error(
+          `A ${type} chart needs a time column, but "${dimension}" holds ${unparseable.map(label => `"${label}"`).join(", ")}. Use a bar chart, or chart against a date column.`
+        );
+      }
+    }
     if (points.length < 2) throw new Error("A chart needs at least two rows of data");
     if (points.some(point => !Number.isFinite(point.value))) {
       throw new Error(`Column "${metric}" must hold numbers on every row to be charted`);
