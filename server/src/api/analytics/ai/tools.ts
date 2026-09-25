@@ -19,8 +19,9 @@ import {
 } from "../../../services/siteMetrics/siteMetrics.js";
 import { executeScopedQuery } from "../runCustomQuery.js";
 import { sanitizeClickhouseError } from "../utils/customQueryValidation.js";
-import { runAnalyticsQuery } from "../utils/analyticsQuery.js";
+import { runAnalyticsQuery, type QuerySpec } from "../utils/analyticsQuery.js";
 import { SessionReplayQueryService } from "../../../services/replay/sessionReplayQueryService.js";
+import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
 import type { Artifact, ResultStore } from "./presentation.js";
 import { defaultBucket, isTimePreset, previousRange, resolvePreset, timeStatementFor, type ResolvedRange } from "./time.js";
 
@@ -117,6 +118,19 @@ const rangeFor = (args: Record<string, unknown>, ctx: ToolContext): ResolvedRang
 
 const filterString = (ctx: ToolContext) => (ctx.filters.length ? JSON.stringify(ctx.filters) : "");
 
+/**
+ * Every analyst query goes through here.
+ *
+ * Two things are cleaned on the way in: `FixedString` padding, which arrives as
+ * NUL bytes and makes Postgres reject the transcript, and the control and
+ * bidi-override characters an untrusted page title can carry. Both are the
+ * model's context as much as the user's screen, so cleaning at the source fixes
+ * all three consumers at once.
+ */
+async function query<T>(spec: QuerySpec): Promise<T[]> {
+  return (await runAnalyticsQuery<T>(spec)).map(row => sanitizeUntrustedValue(row) as T);
+}
+
 // BaseParams wants strings, and an empty date reads as "no bound" in
 // getTimeStatement, which is exactly what an all-time range means here.
 const baseParams = (ctx: ToolContext, range: ResolvedRange) => ({
@@ -156,7 +170,7 @@ const getOverview: AnalystTool = {
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
     const params = baseParams(ctx, range);
-    const current = await runAnalyticsQuery<OverviewRow>({
+    const current = await query<OverviewRow>({
       query: buildOverviewQuery(buildMetricsSpecForWindow(params.filters, ctx.siteId, timeStatementFor(range, ctx.timezone))),
       params: { siteId: ctx.siteId },
     });
@@ -170,7 +184,7 @@ const getOverview: AnalystTool = {
     if (args.compare) {
       const previous = previousRange(range, ctx.timezone);
       if (previous) {
-        const before = await runAnalyticsQuery<OverviewRow>({
+        const before = await query<OverviewRow>({
           query: buildOverviewQuery(
             buildMetricsSpecForWindow(params.filters, ctx.siteId, timeStatementFor(previous, ctx.timezone))
           ),
@@ -275,7 +289,7 @@ const getBreakdown: AnalystTool = {
     if (!BREAKDOWN_DIMENSIONS.includes(dimension)) throw new Error(`Unsupported dimension "${dimension}"`);
     const range = rangeFor(args, ctx);
     const limit = Math.min(Math.max(Number(args.limit ?? 20), 1), 100);
-    const rows = await runAnalyticsQuery<ToolRow>({
+    const rows = await query<ToolRow>({
       query: buildMetricQuery({ ...baseParams(ctx, range), parameter: dimension, limit }, ctx.siteId),
       params: { siteId: ctx.siteId },
     });
@@ -299,7 +313,7 @@ const listEventNames: AnalystTool = {
   parameters: { type: "object", properties: { time: timeShape, limit: { type: "integer", minimum: 1, maximum: 200 } } },
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
-    const rows = await runAnalyticsQuery<{ eventName: string; count: number }>({
+    const rows = await query<{ eventName: string; count: number }>({
       query: buildEventNamesQuery({ ...baseParams(ctx, range), event_name: "" }, ctx.siteId),
       params: { siteId: ctx.siteId },
     });
@@ -319,7 +333,7 @@ const getEventProperties: AnalystTool = {
     const eventName = String(args.event_name ?? "").trim();
     if (!eventName) throw new Error("event_name is required");
     const range = rangeFor(args, ctx);
-    const rows = await runAnalyticsQuery<{ propertyKey: string; propertyValue: string; count: number }>({
+    const rows = await query<{ propertyKey: string; propertyValue: string; count: number }>({
       query: buildEventPropertiesQuery({ ...baseParams(ctx, range), event_name: eventName }, ctx.siteId),
       params: { siteId: ctx.siteId, eventName },
     });
@@ -356,7 +370,7 @@ const getErrors: AnalystTool = {
     const params = baseParams(ctx, range);
     if (args.error_message) {
       const bucket = defaultBucket(range);
-      const rows = await runAnalyticsQuery<ToolRow>({
+      const rows = await query<ToolRow>({
         query: buildErrorBucketedQuery(
           { ...params, bucket: bucket === "week" ? "day" : bucket, errorMessage: String(args.error_message) },
           ctx.siteId
@@ -365,7 +379,7 @@ const getErrors: AnalystTool = {
       });
       return { text: JSON.stringify({ error_message: args.error_message, range: range.label, bucket, points: rows.length }), rows, preview: { limit: 60 } };
     }
-    const rows = await runAnalyticsQuery<ErrorNameItem>({
+    const rows = await query<ErrorNameItem>({
       query: buildErrorNamesQuery({ ...params, limit: Math.min(Number(args.limit ?? 10), 50) }, ctx.siteId),
       params: { siteId: ctx.siteId },
     });
@@ -389,7 +403,7 @@ const getWebVitals: AnalystTool = {
     const range = rangeFor(args, ctx);
     const params = baseParams(ctx, range);
     if (args.dimension) {
-      const rows = await runAnalyticsQuery<ToolRow>({
+      const rows = await query<ToolRow>({
         query: buildPerformanceByDimensionQuery(
           { ...params, dimension: String(args.dimension), limit: Math.min(Number(args.limit ?? 20), 50) },
           ctx.siteId
@@ -398,8 +412,8 @@ const getWebVitals: AnalystTool = {
       });
       return { text: JSON.stringify({ dimension: args.dimension, range: range.label, rows: rows.slice(0, 15) }), rows, preview: { limit: 50 } };
     }
-    const overview = await runAnalyticsQuery<ToolRow>({ query: buildPerformanceOverviewQuery(params, ctx.siteId), params: { siteId: ctx.siteId } });
-    const trend = await runAnalyticsQuery<ToolRow>({
+    const overview = await query<ToolRow>({ query: buildPerformanceOverviewQuery(params, ctx.siteId), params: { siteId: ctx.siteId } });
+    const trend = await query<ToolRow>({
       query: buildPerformanceTimeSeriesQuery(
         { ...params, bucket: defaultBucket(range) === "hour" ? "hour" : "day" },
         ctx.siteId
@@ -424,7 +438,7 @@ const getRetention: AnalystTool = {
   async run(args, ctx) {
     const mode = args.mode === "week" ? "week" : "day";
     const range = Math.min(Math.max(Number(args.range ?? 30), 7), 365);
-    const rows = await runAnalyticsQuery<{
+    const rows = await query<{
       cohort_period: string;
       period_difference: number;
       cohort_size: number;
@@ -471,7 +485,7 @@ const getFunnel: AnalystTool = {
       .safeParse(args.steps);
     if (!steps.success) throw new Error("steps must be 2 to 6 page or event steps");
     const range = rangeFor(args, ctx);
-    const rows = await runAnalyticsQuery<ToolRow>({
+    const rows = await query<ToolRow>({
       query: buildFunnelQuery(baseParams(ctx, range), ctx.siteId, steps.data),
       params: { siteId: ctx.siteId, stepNumber: steps.data.length },
     });
@@ -496,7 +510,7 @@ const getJourneys: AnalystTool = {
     // 100, and the builder binds both.
     const maxSteps = Math.min(Math.max(Number(args.max_steps ?? 3), 2), 10);
     const journeyLimit = Math.min(Math.max(Number(args.limit ?? 10), 1), 100);
-    const rows = await runAnalyticsQuery<{ journey: string[]; sessions_count: number; percentage: number }>({
+    const rows = await query<{ journey: string[]; sessions_count: number; percentage: number }>({
       query: buildJourneysQuery({ ...baseParams(ctx, range), steps: String(maxSteps) }, ctx.siteId, {}),
       params: { siteId: ctx.siteId, maxSteps, journeyLimit },
     });
@@ -563,7 +577,8 @@ const runSql: AnalystTool = {
   },
   async run(args, ctx) {
     const sql = String(args.sql ?? "").slice(0, 20000);
-    const { data } = await executeScopedQuery(sql, ctx.siteIds);
+    const { data: raw } = await executeScopedQuery(sql, ctx.siteIds);
+    const data = raw.map(row => sanitizeUntrustedValue(row) as ToolRow);
     const rows = data.slice(0, MAX_SQL_ROWS);
     return {
       text: JSON.stringify({
