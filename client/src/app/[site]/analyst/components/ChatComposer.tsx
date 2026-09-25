@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, PencilLine, Square } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,8 @@ export function ChatComposer({
   disabled,
   placeholder,
   inputRef,
+  editing,
+  onCancelEdit,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -31,6 +33,9 @@ export function ChatComposer({
   disabled?: boolean;
   placeholder?: string;
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** A re-ask is in progress: the question is loaded and Enter replaces it. */
+  editing?: boolean;
+  onCancelEdit?: () => void;
 }) {
   const t = useExtracted();
   const localRef = useRef<HTMLTextAreaElement>(null);
@@ -50,6 +55,11 @@ export function ChatComposer({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Escape" && editing) {
+      event.preventDefault();
+      onCancelEdit?.();
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       submit();
@@ -58,6 +68,15 @@ export function ChatComposer({
 
   return (
     <form onSubmit={submit} className="border-t border-neutral-150 bg-white px-3 py-3 dark:border-neutral-850 dark:bg-neutral-900 md:px-4">
+      {editing && (
+        <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+          <PencilLine className="size-3" />
+          <span>{t("Editing question — sending replaces it and every answer after it")}</span>
+          <button type="button" onClick={onCancelEdit} className="ml-auto underline underline-offset-2 hover:text-neutral-700 dark:hover:text-neutral-200">
+            {t("Cancel")}
+          </button>
+        </div>
+      )}
       <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-neutral-150 bg-white px-2 py-1.5 focus-within:ring-1 focus-within:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-950">
         <textarea
           ref={ref}

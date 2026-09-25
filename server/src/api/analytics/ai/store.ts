@@ -155,6 +155,30 @@ export async function deleteConversation(id: string) {
   await db.delete(aiConversations).where(eq(aiConversations.id, id));
 }
 
+/**
+ * Drops a question and everything after it, so it can be asked again.
+ *
+ * Deleting by id rather than by timestamp: the question and the answer that
+ * follows it are written in the same request and can share a millisecond, and a
+ * thread edited a year from now does not need a tree — it needs everything from
+ * the edit onwards gone, so the replacement is the only copy.
+ */
+export async function truncateAfter(conversationId: string, messageId: string) {
+  const rows = await db
+    .select({ id: aiMessages.id, role: aiMessages.role })
+    .from(aiMessages)
+    .where(eq(aiMessages.conversationId, conversationId))
+    .orderBy(aiMessages.createdAt);
+  const index = rows.findIndex(row => row.id === messageId);
+  if (index === -1) return { ok: false as const, reason: "message_not_found" as const } as const;
+  if (rows[index].role !== "user") return { ok: false as const, reason: "not_a_question" as const } as const;
+  const doomed = rows.slice(index).map(row => row.id);
+  await db.delete(aiMessages).where(inArray(aiMessages.id, doomed));
+  // Editing the opening question renames the thread, since that is what the
+  // rail shows for it.
+  return { ok: true as const, replacedOpening: index === 0 } as const;
+}
+
 export async function appendMessage(input: {
   conversationId: string;
   role: "user" | "assistant";

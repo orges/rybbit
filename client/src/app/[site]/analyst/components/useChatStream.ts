@@ -33,6 +33,17 @@ const patchLastAssistant = (messages: ChatMessage[], patch: (message: ChatMessag
   return messages;
 };
 
+const patchLastUser = (messages: ChatMessage[], patch: (message: ChatMessage) => ChatMessage) => {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index].role === "user") {
+      const next = [...messages];
+      next[index] = patch(messages[index]);
+      return next;
+    }
+  }
+  return messages;
+};
+
 export interface UseChatStreamOptions {
   organizationId: string;
   siteId: number;
@@ -48,7 +59,7 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
   const assistantIdRef = useRef<string>("");
 
   const send = useCallback(
-    async (text: string, options?: { regenerate?: boolean }) => {
+    async (text: string, options?: { regenerate?: boolean; editOfMessageId?: string }) => {
       const prompt = text.trim();
       if (!prompt || streaming) return;
 
@@ -61,11 +72,14 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
       const assistantId = `local-assistant-${Date.now()}`;
       assistantIdRef.current = assistantId;
       const assistant: ChatMessage = { id: assistantId, role: "assistant", content: "", pending: true, toolCalls: [] };
-      setMessages(current =>
-        options?.regenerate && current.length > 1
-          ? [...current.slice(0, current.length - 1), assistant]
-          : [...current, userMessage, assistant]
-      );
+      setMessages(current => {
+        // A re-ask takes the edited question's place in the transcript, so the
+        // thread reads the same as the one the server keeps.
+        const edited = options?.editOfMessageId ? current.findIndex(entry => entry.id === options.editOfMessageId) : -1;
+        if (edited !== -1) return [...current.slice(0, edited), { ...userMessage, id: options!.editOfMessageId! }, assistant];
+        if (options?.regenerate && current.length > 1) return [...current.slice(0, current.length - 1), assistant];
+        return [...current, userMessage, assistant];
+      });
       setStreaming(true);
 
       const controller = new AbortController();
@@ -76,6 +90,7 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
         message: prompt,
         ...(conversationId ? { conversationId } : {}),
         ...(options?.regenerate ? { regenerate: true } : {}),
+        ...(options?.editOfMessageId ? { editOfMessageId: options.editOfMessageId } : {}),
         context,
       };
 
@@ -141,6 +156,11 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
           case "message_id":
             assistantIdRef.current = event.messageId;
             setMessages(current => patchMessage(current, assistantId, message => ({ ...message, id: event.messageId })));
+            break;
+          case "user_message_id":
+            // The stored id, so this question can be edited later without a
+            // reload; a local id would come back as "not found".
+            setMessages(current => patchLastUser(current, message => ({ ...message, id: event.messageId })));
             break;
           case "done":
             setMessages(current => patchMessage(current, assistantId, message => ({ ...message, pending: false, stopped: event.stopped })));

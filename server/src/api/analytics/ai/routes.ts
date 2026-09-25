@@ -29,6 +29,8 @@ const chatBodySchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
   regenerate: z.boolean().optional(),
+  /** Re-ask from this question: it and everything after it is replaced. */
+  editOfMessageId: z.string().uuid().optional(),
   context: z
     .object({
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -84,7 +86,7 @@ export async function analystChat(
   const userId = request.user?.id;
   if (!userId) return reply.status(403).send({ error: "A user session is required" });
   const { organizationId } = params.data;
-  const { siteId, message, conversationId, regenerate, context } = body.data;
+  const { siteId, message, conversationId, regenerate, editOfMessageId, context } = body.data;
   if (!(await authorize(request, organizationId, siteId))) {
     return reply.status(403).send({ error: "No access to the requested site" });
   }
@@ -108,6 +110,19 @@ export async function analystChat(
     // A retry replaces the previous answer rather than stacking a second one on
     // the same question.
     if (regenerate) await store.dropLastAssistantMessage(conversation.id);
+    // Re-asking a different question from the same point: the old question and
+    // the turns that answered it go, and the new one answers off the history
+    // that came before.
+    let retitled: string | undefined;
+    if (editOfMessageId) {
+      const edit = await store.truncateAfter(conversation.id, editOfMessageId);
+      if (!edit.ok) {
+        return reply
+          .status(edit.reason === "message_not_found" ? 404 : 400)
+          .send({ error: edit.reason === "message_not_found" ? "Question not found" : "Only a question can be edited" });
+      }
+      if (edit.replacedOpening) retitled = deriveTitle(message);
+    }
     const history: OpenRouterMessage[] = (await store.recentMessages(conversation.id, 20))
       .reverse()
       .map(row => ({ role: row.role, content: row.content }) as OpenRouterMessage)
@@ -125,9 +140,10 @@ export async function analystChat(
     };
     const [site] = await db.select({ name: sites.name }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
     const memories = (await store.listMemories(organizationId, siteId)).map(memory => memory.content);
+    let turn: { id: string } | undefined;
 
     if (!regenerate) {
-      await store.appendMessage({
+      turn = await store.appendMessage({
         conversationId: conversation.id,
         role: "user",
         content: message,
@@ -137,6 +153,13 @@ export async function analystChat(
 
     const send = startSse(reply);
     send({ type: "conversation", conversationId: conversation.id });
+    // The question needs its stored id before the answer does: re-asking it is a
+    // request the server resolves by id.
+    if (turn) send({ type: "user_message_id", messageId: turn.id });
+    if (retitled) {
+      await store.renameConversation(conversation.id, retitled);
+      send({ type: "title", title: retitled });
+    }
 
     const started = Date.now();
     const result = await runAgent({

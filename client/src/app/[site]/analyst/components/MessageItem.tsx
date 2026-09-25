@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Copy, Filter, Globe, RefreshCw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
+import { CalendarDays, Copy, Filter, Globe, Pencil, RefreshCw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useState, type ReactNode } from "react";
 import type { AnalystArtifact, ChatMessage, MessageContext } from "@/api/analyst/endpoints/analyst";
@@ -110,12 +110,14 @@ function MessageActions({
 export function MessageItem({
   message,
   onRetry,
+  onEdit,
   onFeedback,
   onFollowup,
   siteId,
 }: {
   message: ChatMessage;
   onRetry: () => void;
+  onEdit: () => void;
   onFeedback: (rating: number) => void;
   onFollowup: (value: string) => void;
   siteId: number;
@@ -138,7 +140,19 @@ export function MessageItem({
         <div className="max-w-[85%] whitespace-pre-wrap rounded-lg rounded-br-sm bg-neutral-100 px-3 py-2 text-sm dark:bg-neutral-800">
           {message.content}
         </div>
-        <ContextChips context={message.context} />
+        <div className="flex items-center gap-1">
+          <ContextChips context={message.context} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="smIcon"
+            aria-label={t("Edit question")}
+            onClick={onEdit}
+            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        </div>
       </div>
     );
   }

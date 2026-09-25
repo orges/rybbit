@@ -34,6 +34,7 @@ export type AgentEvent =
   | { type: "artifact"; artifact: Artifact }
   | { type: "usage"; usage: OpenRouterUsage; model: string }
   | { type: "title"; title: string }
+  | { type: "user_message_id"; messageId: string }
   | { type: "unverified"; figures: string[] }
   | { type: "message_id"; messageId: string }
   | { type: "done"; stopped: boolean; steps: number }

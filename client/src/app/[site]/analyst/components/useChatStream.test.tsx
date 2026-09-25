@@ -130,6 +130,30 @@ describe("useChatStream", () => {
 
     expect(result.current.messages.map(message => message.content)).toEqual(["count sessions", "second"]);
   });
+  it("replaces a question and everything after it when the question is edited", async () => {
+    emit([
+      { type: "user_message_id", messageId: "q1" },
+      { type: "text_delta", text: "first answer" },
+      { type: "message_id", messageId: "m1" },
+      { type: "done", stopped: false, steps: 1 },
+    ]);
+    const { result } = renderStream();
+    await act(async () => {
+      await result.current.send("count sessions");
+    });
+    expect(result.current.messages[0].id).toBe("q1");
+    emit([
+      { type: "user_message_id", messageId: "q2" },
+      { type: "text_delta", text: "second answer" },
+      { type: "done", stopped: false, steps: 1 },
+    ]);
+    await act(async () => {
+      await result.current.send("count sessions last 7 days", { editOfMessageId: "q1" });
+    });
+
+    expect(result.current.messages.map(message => message.content)).toEqual(["count sessions last 7 days", "second answer"]);
+    expect(streamAnalystMessage.mock.calls[1][1]).toMatchObject({ editOfMessageId: "q1" });
+  });
 });
 
 describe("answer verification", () => {

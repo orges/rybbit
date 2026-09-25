@@ -45,6 +45,8 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const timeZone = useTimezone();
 
   const [draft, setDraft] = useState("");
+  /** The question being re-asked, if any. */
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [chatSearch, setChatSearch] = useState("");
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -82,6 +84,8 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const loadConversation = useCallback(
     async (id: string | null) => {
       setFollow(true);
+      // A pending edit belongs to the thread it came from.
+      setEditing(null);
       if (!id) {
         load([], "");
         return;
@@ -112,6 +116,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
     if (remember) {
       addMemory.mutate(remember[1].trim(), { onSuccess: () => toast.success(t("Remembered for this site")) });
       setDraft("");
+      setEditing(null);
       return;
     }
     if (/^\/usage$/i.test(text)) {
@@ -130,11 +135,21 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
         { icon: "⚡" }
       );
       setDraft("");
+      setEditing(null);
       return;
     }
     setFollow(true);
     setDraft("");
-    void send(text);
+    const reask = editing;
+    setEditing(null);
+    void send(text, reask ? { editOfMessageId: reask.id } : undefined);
+  };
+
+  /** Loads a past question back into the composer so it can be asked differently. */
+  const editQuestion = (message: ChatMessage) => {
+    setEditing(message);
+    setDraft(message.content);
+    composerRef.current?.focus();
   };
 
   const retry = (message: ChatMessage) => {
@@ -227,6 +242,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
                     key={message.id}
                     message={message}
                     onRetry={() => retry(message)}
+                    onEdit={() => editQuestion(message)}
                     onFeedback={rating => void feedback(message, rating)}
                     siteId={siteId}
                     onFollowup={value => {
@@ -265,6 +281,11 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             onStop={stop}
             streaming={streaming}
             disabled={!organizationId}
+            editing={editing !== null}
+            onCancelEdit={() => {
+              setEditing(null);
+              setDraft("");
+            }}
           />
         </div>
       </section>

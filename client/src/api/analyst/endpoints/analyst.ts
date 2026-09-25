@@ -67,6 +67,7 @@ export type ChatStreamEvent =
   | { type: "artifact"; artifact: AnalystArtifact }
   | { type: "usage"; usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
   | { type: "title"; title: string }
+  | { type: "user_message_id"; messageId: string }
   | { type: "unverified"; figures: string[] }
   | { type: "message_id"; messageId: string }
   | { type: "done"; stopped: boolean; steps: number }
@@ -77,6 +78,8 @@ export interface SendMessageRequest {
   message: string;
   conversationId?: string;
   regenerate?: boolean;
+  /** Re-ask from this question: it and every turn after it is replaced. */
+  editOfMessageId?: string;
   context?: MessageContext;
 }
 
