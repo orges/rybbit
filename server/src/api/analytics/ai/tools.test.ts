@@ -1,7 +1,13 @@
 import { DateTime } from "luxon";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Only the presentation half of the registry is exercised here. Stubbing the
+// analytics tools keeps this file off the ClickHouse, storage and auth chain
+// they pull in, which needs a live base URL just to import.
+vi.mock("./tools.js", () => ({ ANALYST_TOOLS: [] }));
+
 import { defaultBucket, previousRange, resolvePreset, resolveToolRange } from "./time.js";
-import { ResultStore, PRESENTATION_TOOLS } from "./presentation.js";
+import { ALL_TOOLS, ResultStore } from "./presentation.js";
 import type { ToolContext, ToolRow } from "./tools.js";
 
 const context = (results: ResultStore) =>
@@ -16,7 +22,7 @@ const context = (results: ResultStore) =>
   }) as ToolContext;
 
 const run = async (name: string, args: Record<string, unknown>, results: ResultStore) => {
-  const tool = PRESENTATION_TOOLS.find(entry => entry.name === name);
+  const tool = ALL_TOOLS.get(name);
   if (!tool) throw new Error(`missing tool ${name}`);
   return tool.run(args, context(results));
 };

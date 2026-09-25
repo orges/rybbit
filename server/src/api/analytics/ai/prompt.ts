@@ -82,6 +82,7 @@ export const ANALYST_TOOL_SCHEMAS = [...ANALYST_TOOLS, ...PRESENTATION_TOOLS].ma
   function: { name: tool.name, description: tool.description, parameters: tool.parameters },
 }));
 
+
 export const ANALYST_EXAMPLE_PROMPTS = [
   "How is traffic trending compared to the previous period?",
   "Which pages get the most views but have the worst bounce rate?",

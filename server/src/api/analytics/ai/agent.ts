@@ -7,8 +7,8 @@ import {
   type OpenRouterUsage,
 } from "../../../lib/openrouter.js";
 import { ANALYST_TOOL_SCHEMAS, buildSystemPrompt, type AnalystContext } from "./prompt.js";
-import { ResultStore, type Artifact } from "./presentation.js";
-import { ANALYST_TOOL_MAP, toolFailure, type ToolContext } from "./tools.js";
+import { ALL_TOOLS, ResultStore, type Artifact } from "./presentation.js";
+import { toolFailure, type ToolContext } from "./tools.js";
 
 /**
  * The analyst's tool loop.
@@ -155,10 +155,10 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       const args = parseArguments(call.function.arguments);
       emit({ type: "tool_start", id: call.id, name, input: args });
       const record: ToolCallRecord = { id: call.id, name, input: args, output: "", ok: true, durationMs: 0 };
-      const tool = ANALYST_TOOL_MAP.get(name);
+      const tool = ALL_TOOLS.get(name);
       if (!tool) {
         record.ok = false;
-        record.output = `Unknown tool "${name}". Available tools: ${[...ANALYST_TOOL_MAP.keys()].join(", ")}`;
+        record.output = `Unknown tool "${name}". Available tools: ${[...ALL_TOOLS.keys()].join(", ")}`;
       } else {
         try {
           const output = await tool.run(args, toolContextWithStore);

@@ -594,8 +594,6 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   runSql,
 ];
 
-export const ANALYST_TOOL_MAP = new Map(ANALYST_TOOLS.map(tool => [tool.name, tool]));
-
 /** Surfaces a failed tool call to the model instead of aborting the run. */
 export function toolFailure(name: string, error: unknown) {
   const message =

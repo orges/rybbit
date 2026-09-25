@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AnalystTool, ToolContext, ToolOutput, ToolRow } from "./tools.js";
+import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolRow } from "./tools.js";
 
 /**
  * Presentation tools: how the answer is drawn, not what it says.
@@ -225,3 +225,6 @@ const suggestFollowups: AnalystTool = {
 };
 
 export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable, suggestFollowups];
+
+/** Every tool the agent can actually run, keyed by the name the model calls. */
+export const ALL_TOOLS = new Map([...ANALYST_TOOLS, ...PRESENTATION_TOOLS].map(tool => [tool.name, tool]));

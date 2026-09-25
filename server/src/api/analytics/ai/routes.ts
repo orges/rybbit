@@ -184,11 +184,12 @@ export async function analystChat(
       conversationId: conversation.id,
       messageId: assistant.id,
       model: result.model,
-      status: result.stopped ? "stopped" : "completed",
+      status: result.error ? "error" : result.stopped ? "stopped" : "completed",
       inputTokens: result.usage.prompt_tokens ?? 0,
       outputTokens: result.usage.completion_tokens ?? 0,
       durationMs: Date.now() - started,
       steps: result.steps,
+      ...(result.error ? { error: result.error } : {}),
     });
 
     if (isNew && !result.stopped) {

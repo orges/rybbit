@@ -248,7 +248,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
 function EmptyState({ onPick }: { onPick: (value: string) => void }) {
   const t = useExtracted();
   return (
-    <div className="flex flex-col items-start gap-6 py-10">
+    <div className="flex min-h-[60vh] flex-col items-start justify-center gap-6">
       <div className="space-y-1.5">
         <h2 className="text-lg font-semibold">{t("Ask your analytics")}</h2>
         <p className="max-w-xl text-sm text-neutral-500 dark:text-neutral-400">
