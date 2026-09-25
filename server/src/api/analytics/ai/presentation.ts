@@ -454,9 +454,10 @@ const suggestFollowups: AnalystTool = {
       .safeParse(args);
     if (!parsed.success) throw new Error("Give a title and 2 to 4 questions of a few words each");
     return {
-      // The questions are rendered under the answer. Echoing them back only
-      // gives the model something to repeat.
-      text: `Recorded ${parsed.data.options.length} follow-up questions.`,
+      // Rendered under the answer, so there is nothing to tell the model except
+      // the questions themselves. A sentence here becomes a sentence in the
+      // answer ("I recorded 3 follow-up questions"), which is noise.
+      text: JSON.stringify({ follow_ups: parsed.data.options }),
       artifact: { type: "followups", title: parsed.data.title, options: parsed.data.options },
     };
   },

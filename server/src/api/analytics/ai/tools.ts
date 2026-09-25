@@ -6,6 +6,8 @@ import { buildErrorBucketedQuery } from "../getErrorBucketed.js";
 import { buildErrorNamesQuery, type ErrorNameItem } from "../getErrorNames.js";
 import { buildErrorEventsQuery } from "../getErrorEvents.js";
 import { buildFunnelQuery } from "../funnels/getFunnel.js";
+import { buildGoalsConversionsQuery, buildGoalsTotalSessionsQuery } from "../goals/getGoals.js";
+import { buildGoalTimeSeriesQuery } from "../goals/getGoalTimeSeries.js";
 import { buildJourneysQuery } from "../getJourneys.js";
 import { buildMetricQuery } from "../getMetric.js";
 import { buildPerformanceByDimensionQuery } from "../performance/getPerformanceByDimension.js";
@@ -19,6 +21,9 @@ import {
   type OverviewRow,
 } from "../../../services/siteMetrics/siteMetrics.js";
 import { executeScopedQuery } from "../runCustomQuery.js";
+import { db } from "../../../db/postgres/postgres.js";
+import { goals } from "../../../db/postgres/schema.js";
+import { eq } from "drizzle-orm";
 import { sanitizeClickhouseError } from "../utils/customQueryValidation.js";
 import { runAnalyticsQuery, type QuerySpec } from "../utils/analyticsQuery.js";
 import { SessionReplayQueryService } from "../../../services/replay/sessionReplayQueryService.js";
@@ -549,6 +554,147 @@ const getErrorEvents: AnalystTool = {
   },
 };
 
+const getGoalsTool: AnalystTool = {
+  name: "get_goals",
+  description:
+    "The goals configured on this Site, with the sessions and conversions each one got over a range, its conversion rate, and whether the rate is rising or falling. Use it for any question about goals, targets, or 'are we on track'.",
+  parameters: {
+    type: "object",
+    properties: {
+      time: timeShape,
+      goal: { type: "string", description: "Only this goal, by name or id. Omit for all of them." },
+    },
+  },
+  async run(args, ctx) {
+    const range = rangeFor(args, ctx);
+    const params = baseParams(ctx, range);
+    // The Site is the caller's, never the model's: a goal from another Site is
+    // not readable through this tool at all.
+    const all = await db.select().from(goals).where(eq(goals.siteId, ctx.siteId));
+    if (!all.length) {
+      return {
+        text: JSON.stringify({
+          range: range.label,
+          goals: [],
+          note: "This Site has no goals yet. Say so rather than guessing what they might be, and offer to help set one up.",
+        }),
+      };
+    }
+    const wanted = args.goal ? all.filter(goal => matchesGoal(goal, String(args.goal))) : all;
+    if (args.goal && !wanted.length) {
+      return {
+        text: JSON.stringify({
+          range: range.label,
+          goals: [],
+          available: all.map(goal => goalLabel(goal)),
+          note: `No goal matches "${args.goal}".`,
+        }),
+      };
+    }
+
+    const sessionsData = await query<{ total_sessions: number }>({
+      query: buildGoalsTotalSessionsQuery(params, ctx.siteId),
+    });
+    const totalSessions = Number(sessionsData[0]?.total_sessions ?? 0);
+    const conversionsQuery = buildGoalsConversionsQuery(params, ctx.siteId, wanted);
+    const conversions = conversionsQuery ? await query<Record<string, number>>({ query: conversionsQuery }) : [];
+    const counted = conversions[0] ?? {};
+
+    const trend = await goalTrend(ctx, wanted, params, range);
+    const rows = wanted.map(goal => {
+      const goalConversions = Number(counted[`goal_${goal.goalId}_conversions`] ?? 0);
+      const rate = totalSessions > 0 ? goalConversions / totalSessions : 0;
+      const movement = trend.get(goal.goalId);
+      return {
+        goal_id: goal.goalId,
+        name: goal.name || goalLabel(goal),
+        goal_type: goal.goalType,
+        target: goalTarget(goal),
+        sessions: totalSessions,
+        conversions: goalConversions,
+        conversion_rate: formatNumber(rate * 100),
+        ...(movement ? { trend: movement } : {}),
+      };
+    });
+    return {
+      text: JSON.stringify({
+        range: range.label,
+        sessions: totalSessions,
+        goals: rows.map(row => ({ ...row, target: undefined })),
+      }),
+      rows,
+      preview: { columns: ["name", "goal_type", "target", "conversions", "sessions", "conversion_rate"], limit: 25 },
+    };
+  },
+};
+
+/** A goal the model named by id, exact name, or the condition it matches. */
+const matchesGoal = (goal: (typeof goals.$inferSelect), wanted: string) => {
+  const needle = wanted.trim().toLowerCase();
+  return (
+    String(goal.goalId) === needle ||
+    (goal.name ?? "").toLowerCase() === needle ||
+    goalLabel(goal).toLowerCase().includes(needle) ||
+    JSON.stringify(goal.config ?? {}).toLowerCase().includes(needle)
+  );
+};
+
+/** What the goal actually counts, in words: the path or event behind it. */
+const goalLabel = (goal: (typeof goals.$inferSelect)) => {
+  if (goal.name) return goal.name;
+  const config = (goal.config ?? {}) as { pathPattern?: string; eventName?: string; valuePattern?: string };
+  return config.pathPattern || config.eventName || config.valuePattern || goal.goalType;
+};
+
+/** The pattern a goal watches for, so the answer can say what would count. */
+const goalTarget = (goal: (typeof goals.$inferSelect)) => {
+  const config = (goal.config ?? {}) as { pathPattern?: string; eventName?: string; valuePattern?: string };
+  return config.pathPattern || config.eventName || config.valuePattern || "";
+};
+
+/**
+ * Rising or falling, from the same series the Goals page draws.
+ *
+ * A conversion rate on its own says where a goal is; the direction is what makes
+ * it a question worth asking, so this is the difference between "3.1%" and
+ * "3.1%, down from 4.4% six weeks ago".
+ */
+async function goalTrend(
+  ctx: ToolContext,
+  siteGoals: (typeof goals.$inferSelect)[],
+  params: ReturnType<typeof baseParams>,
+  range: ResolvedRange
+) {
+  const sql = buildGoalTimeSeriesQuery({ ...params, bucket: defaultBucket(range) }, ctx.siteId, siteGoals);
+  if (!sql) return new Map<number, string>();
+  let series: Array<{ goal_id: number; conversion_rate: number | string }>;
+  try {
+    series = await query({ query: sql, params: { siteId: ctx.siteId, timeZone: ctx.timezone } });
+  } catch {
+    // A trend is a nicety; the counts are the answer.
+    return new Map<number, string>();
+  }
+  const movement = new Map<number, string>();
+  for (const goal of siteGoals) {
+    const rates = series
+      .filter(row => Number(row.goal_id) === goal.goalId)
+      .map(row => Number(row.conversion_rate) * 100)
+      .filter(Number.isFinite);
+    if (rates.length < 2) continue;
+    // Compare the two ends of the range rather than one period to the next.
+    const window = Math.max(1, Math.round(rates.length / 3));
+    const early = average(rates.slice(0, window));
+    const late = average(rates.slice(-window));
+    if (!early || !late) continue;
+    const delta = Math.round(((late - early) / early) * 1000) / 10;
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1) continue;
+    movement.set(goal.goalId, `${delta > 0 ? "up" : "down"} ${Math.abs(delta)}%`);
+  }
+  return movement;
+}
+
+const average = (values: number[]) => values.reduce((total, value) => total + value, 0) / values.length;
+
 const getJourneys: AnalystTool = {
   name: "get_journeys",
   description: "The most common sequences of pages inside a session, ranked by how many sessions took them.",
@@ -663,6 +809,7 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   getWebVitals,
   getRetention,
   getFunnel,
+  getGoalsTool,
   getJourneys,
   searchReplays,
   runSql,

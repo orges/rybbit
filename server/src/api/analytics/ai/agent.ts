@@ -169,13 +169,15 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       const started = Date.now();
       const name = call.function.name;
       const args = parseArguments(call.function.arguments);
-      emit({ type: "tool_start", id: call.id, name, input: args });
       const record: ToolCallRecord = { id: call.id, name, input: args, output: "", ok: true, durationMs: 0 };
       // Models re-issue the same call — the same statement after a failed chart,
       // the same suggestion twice. Replaying the first answer keeps the turn
-      // short and stops the loop; the second row still shows in the trail.
+      // short and stops the loop.
       const cacheKey = `${name}:${JSON.stringify(args)}`;
       const cached = callCache.get(cacheKey);
+      // A replay is already in the trail, and one model that repeats itself five
+      // times should not scroll the reader past five identical rows.
+      if (!cached) emit({ type: "tool_start", id: call.id, name, input: args });
       const tool = cached ? undefined : ALL_TOOLS.get(name);
       if (cached) {
         record.ok = cached.ok;
@@ -214,16 +216,19 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       }
       if (!cached && record.ok) callCache.set(cacheKey, record);
       record.durationMs = Date.now() - started;
-      result.toolCalls.push(record);
-      emit({
-        type: "tool_end",
-        id: record.id,
-        name,
-        ok: record.ok,
-        summary: summarize(record),
-        durationMs: record.durationMs,
-        ...(record.artifact ? { artifact: record.artifact } : {}),
-      });
+      // A replayed call is already in the trail; it is not streamed again.
+      if (!cached) {
+        result.toolCalls.push(record);
+        emit({
+          type: "tool_end",
+          id: record.id,
+          name,
+          ok: record.ok,
+          summary: summarize(record),
+          durationMs: record.durationMs,
+          ...(record.artifact ? { artifact: record.artifact } : {}),
+        });
+      }
       messages.push({ role: "tool", tool_call_id: call.id, content: record.output });
     }
 

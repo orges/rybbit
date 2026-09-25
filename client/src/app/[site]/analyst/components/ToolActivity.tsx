@@ -26,6 +26,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_web_vitals: "Read web vitals",
   get_retention: "Read retention",
   get_funnel: "Read funnel",
+  get_goals: "Read goals",
   get_journeys: "Read journeys",
   search_replays: "Search session replays",
   run_sql: "Run a custom query",
