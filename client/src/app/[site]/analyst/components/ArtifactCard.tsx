@@ -8,7 +8,7 @@ import { DashboardPie } from "@/app/[site]/dashboards/components/charts/Dashboar
 import { Funnel as FunnelSteps } from "@/app/[site]/funnels/components/Funnel";
 import { RetentionChart } from "@/app/[site]/retention/RetentionChart";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SESSION_COLUMN, type ResultLink } from "./links";
+import { SESSION_COLUMN, TIMESTAMP_COLUMN, asUtcIso, type ResultLink } from "./links";
 
 /**
  * Rendered results.
@@ -82,15 +82,18 @@ function formatCell(value: string) {
 
 function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact, { type: "table" }>; siteId: number }) {
   const sessionColumn = artifact.columns.indexOf(SESSION_COLUMN);
+  const timestampColumn = artifact.columns.indexOf(TIMESTAMP_COLUMN);
   // A recording is only in the list for the window it happened in, so a link
   // that left the range out landed the reader on an empty Replay page.
   // `timeMode` is what tells the dashboard to read the dates from the URL rather
   // than from its own last-used range; without it both are overwritten.
-  const replayHref = (session: string) => {
+  // `at` opens the recording on the moment the row describes, not the first one.
+  const replayHref = (session: string, rowIndex: number) => {
     const window = artifact.range
       ? `&timeMode=range&startDate=${artifact.range.startDate}&endDate=${artifact.range.endDate}`
       : "";
-    return `/${siteId}/replay?session=${encodeURIComponent(session)}${window}`;
+    const at = timestampColumn === -1 ? "" : asUtcIso(artifact.rows[rowIndex]?.[timestampColumn] ?? "");
+    return `/${siteId}/replay?session=${encodeURIComponent(session)}${window}${at ? `&at=${encodeURIComponent(at)}` : ""}`;
   };
   return (
     <div className="space-y-1.5">
@@ -112,7 +115,7 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
                   <TableCell key={cellIndex} className="max-w-80 truncate font-mono text-xs tabular-nums" title={cell}>
                     {cellIndex === sessionColumn && cell ? (
                       <a
-                        href={replayHref(cell)}
+                        href={replayHref(cell, rowIndex)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline underline-offset-2 hover:text-dataviz"

@@ -1,4 +1,4 @@
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import "rrweb-player/dist/style.css";
 import { useShallow } from "zustand/react/shallow";
@@ -105,6 +105,22 @@ export function ReplayPlayer({ width, height, isDrawer }: { width: number; heigh
     onSkipForward: handleSkipForward,
     onPlayPause: handlePlayPause,
   });
+
+  // `?at=` opens the recording at the moment something happened, which is what a
+  // link out of an error answer wants: the frame the error fired on, not the
+  // first one. The offset is measured from the session's first recorded event,
+  // which is what the player's own timeline counts from.
+  const searchParams = useSearchParams();
+  const seekToParam = searchParams.get("at");
+  useEffect(() => {
+    if (!player || !seekToParam || !data?.events?.length) return;
+    const at = Date.parse(seekToParam);
+    const firstEvent = Number(data.events[0]?.timestamp);
+    if (!Number.isFinite(at) || !Number.isFinite(firstEvent)) return;
+    const offset = Math.min(Math.max(at - firstEvent, 0), duration || Infinity);
+    player.goto(offset);
+    setCurrentTime(offset);
+  }, [player, seekToParam, data, duration, setCurrentTime]);
 
   if (error) {
     return (

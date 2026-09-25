@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resultLink } from "./links";
+import { asUtcIso, resultLink } from "./links";
 
 describe("resultLink", () => {
   it("sends each tool to the page that owns its data", () => {
@@ -23,5 +23,18 @@ describe("resultLink", () => {
   it("has no link for a tool that is not about the site's data", () => {
     expect(resultLink("show_chart", {}, 7)).toBeNull();
     expect(resultLink("suggest_followups", {}, 7)).toBeNull();
+  });
+});
+
+describe("asUtcIso", () => {
+  it("marks a bare wall-clock timestamp as UTC rather than local time", () => {
+    expect(asUtcIso("2026-09-20 22:35:18")).toBe("2026-09-20T22:35:18Z");
+    expect(asUtcIso("2026-09-20 22:32:53.913")).toBe("2026-09-20T22:32:53.913Z");
+  });
+
+  it("leaves a value that already carries an offset alone", () => {
+    expect(asUtcIso("2026-09-20T22:35:18.000Z")).toBe("2026-09-20T22:35:18.000Z");
+    expect(asUtcIso("2026-09-20T22:35:18+02:00")).toBe("2026-09-20T22:35:18+02:00");
+    expect(asUtcIso("")).toBe("");
   });
 });

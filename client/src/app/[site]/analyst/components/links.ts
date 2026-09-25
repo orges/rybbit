@@ -53,3 +53,17 @@ export function resultLink(
 
 /** A session id in a result is a link to that recording. */
 export const SESSION_COLUMN = "session_id";
+
+/** The column holding when a row happened, used to open a replay at that moment. */
+export const TIMESTAMP_COLUMN = "timestamp";
+
+/**
+ * A ClickHouse timestamp is a bare wall-clock string in UTC — `2026-09-20
+ * 22:35:18` — which a browser parses as local time, off by the viewer's offset.
+ * Anything that turns one into an instant has to say so.
+ */
+export function asUtcIso(value: string) {
+  if (!value) return "";
+  if (/[Zz]|[+-]\d{2}:?\d{2}$/.test(value)) return value;
+  return `${value.replace(" ", "T")}Z`;
+}
