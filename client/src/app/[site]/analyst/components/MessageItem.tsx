@@ -160,14 +160,17 @@ export function MessageItem({
   const hasContent = message.content.trim().length > 0;
   return (
     <div className="group space-y-2.5">
-      <div className="mx-auto max-w-3xl space-y-2.5">
+      {/* Prose is capped to a reading measure but starts on the same edge as the
+          artifacts below it. Centring it inside the wider column left the text
+          floating 140px to the right of its own chart, and nothing lined up. */}
+      <div className="max-w-3xl space-y-2.5">
         <ToolActivity reasoning={message.reasoning} toolCalls={message.toolCalls} running={message.pending && !hasContent} />
         {hasContent && <Markdown>{message.content}</Markdown>}
       </div>
       {(message.artifacts ?? []).map((artifact, index) => (
         <ArtifactCard key={index} artifact={artifact} onFollowup={onFollowup} link={linkFor(artifact)} siteId={siteId} />
       ))}
-      <div className="mx-auto max-w-3xl empty:space-y-0">
+      <div className="max-w-3xl empty:space-y-0">
         {message.error && (
           <p role="alert" className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
