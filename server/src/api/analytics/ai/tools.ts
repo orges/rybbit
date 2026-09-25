@@ -413,7 +413,7 @@ const getWebVitals: AnalystTool = {
 const getRetention: AnalystTool = {
   name: "get_retention",
   description:
-    "Cohort retention: for each day or week a user first appeared, the share of those users who came back in later periods.",
+    "Cohort retention: for each day or week a user first appeared, the share of those users who came back in later periods. Returns cohorts of {cohort date, size, retained_percent per period}.",
   parameters: {
     type: "object",
     properties: {
@@ -445,7 +445,7 @@ const getRetention: AnalystTool = {
 const getFunnel: AnalystTool = {
   name: "get_funnel",
   description:
-    "Conversion through an ordered sequence of steps. Each step is a page path or a custom event name. Returns sessions and step-by-step drop-off.",
+    "Conversion through an ordered sequence of steps. Each step is a page path or a custom event name. Returns step_number, step_name, sessions, conversion_rate and dropoff_rate — chartable as step_name against sessions.",
   parameters: {
     type: "object",
     properties: {

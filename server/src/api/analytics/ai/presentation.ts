@@ -71,7 +71,7 @@ const chartArgs = z.object({
 const showChart: AnalystTool = {
   name: "show_chart",
   description:
-    "Draw a chart of a previous tool result. Pick the column that labels each point (`dimension`), the numeric column to plot (`metric`), and optionally a second column to split the points into series. Donut and bar need one point per label.",
+    "Draw a chart of a previous tool result. Pick the column that labels each point (`dimension`), the numeric column to plot (`metric`), and optionally a second column to split the points into series. Donut needs one point per label; a funnel is a bar of step_name against sessions, and a line of time against sessions is a trend.",
   parameters: {
     type: "object",
     properties: {
@@ -80,7 +80,7 @@ const showChart: AnalystTool = {
       type: { type: "string", enum: ["bar", "line", "area", "donut"] },
       dimension: { type: "string", description: "Column whose values label each point" },
       metric: { type: "string", description: "Numeric column to plot" },
-      series: { type: "string", description: "Optional second dimension; only valid for line and area" },
+      series: { type: "string", description: "Optional second dimension, drawn as one bar or line per value" },
     },
     required: ["result_id", "title", "type", "dimension", "metric"],
   },
@@ -99,7 +99,7 @@ const showChart: AnalystTool = {
     if (dimension === metric || (series && (series === dimension || series === metric))) {
       throw new Error("dimension, metric and series must be different columns");
     }
-    if (series && type !== "line" && type !== "area") throw new Error("Only line and area charts support series");
+    if (series && type === "donut") throw new Error("A donut has one value per slice; drop the series column");
 
     const points = result.rows.map(row => ({
       label: String(row[dimension] ?? "").slice(0, 120),

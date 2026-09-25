@@ -16,9 +16,15 @@ type DashboardBarChartProps = {
   mapping: DashboardCardMapping;
   /** The data carries its own time range rather than being a view of the dashboard's. */
   standalone?: boolean;
+  /** Print each bar's value above it — worth it for a short chat chart, not for a card. */
+  showValues?: boolean;
 };
 
-const MARGIN = { top: 10, right: 15, bottom: 30, left: 40 };
+/** Above this many bars the labels collide faster than they inform. */
+const MAX_LABELLED_BARS = 30;
+
+// The extra top margin leaves room for the optional value labels.
+const MARGIN = { top: 22, right: 15, bottom: 30, left: 40 };
 const Y_TICKS = 5;
 const GROUP_GAP = 2;
 
@@ -29,7 +35,7 @@ function topRoundedRect(x: number, y: number, width: number, height: number, rad
   return `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} L${x + width},${y + height} Z`;
 }
 
-export function DashboardBarChart({ rows, mapping, standalone = false }: DashboardBarChartProps) {
+export function DashboardBarChart({ rows, mapping, standalone = false, showValues = false }: DashboardBarChartProps) {
   const storeBucket = useStore(state => state.bucket);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -134,6 +140,7 @@ export function DashboardBarChart({ rows, mapping, standalone = false }: Dashboa
   }
 
   const multi = series.length > 1;
+  const labelValues = showValues && !multi && categories.length <= MAX_LABELLED_BARS;
 
   return (
     <div className="flex h-full flex-col">
@@ -175,11 +182,20 @@ export function DashboardBarChart({ rows, mapping, standalone = false }: Dashboa
                     const height = plotBottom - y;
                     const x = band + seriesIndex * (barWidth + GROUP_GAP);
                     return (
-                      <path
-                        key={item.key}
-                        d={topRoundedRect(x, y, barWidth, height, 3)}
-                        fill={item.color}
-                      />
+                      <g key={item.key}>
+                        <path d={topRoundedRect(x, y, barWidth, height, 3)} fill={item.color} />
+                        {labelValues && (
+                          <text
+                            x={x + barWidth / 2}
+                            y={y - 6}
+                            textAnchor="middle"
+                            fontSize={11}
+                            fill={tickColor}
+                          >
+                            {formatter(value)}
+                          </text>
+                        )}
+                      </g>
                     );
                   })}
                 </g>

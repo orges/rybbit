@@ -56,7 +56,16 @@ function Chart({ artifact }: { artifact: ChartArtifact }) {
   }
   return (
     <div style={{ height: CHART_HEIGHT }}>
-      <DashboardBarChart standalone rows={rows} mapping={{ xColumn: artifact.dimension, yColumns: [artifact.metric] }} />
+      <DashboardBarChart
+        standalone
+        showValues
+        rows={rows}
+        mapping={{
+          xColumn: artifact.dimension,
+          yColumns: [artifact.metric],
+          ...(seriesColumn ? { seriesColumn } : {}),
+        }}
+      />
     </div>
   );
 }

@@ -117,7 +117,7 @@ describe("show_chart", () => {
     ).rejects.toThrow('Column "label" must hold numbers');
   });
 
-  it("allows series on a line chart but not on a bar chart", async () => {
+  it("groups a bar chart by series, and keeps a donut to one value per slice", async () => {
     const rows = [
       { day: "2026-09-19", country: "DE", views: 3 },
       { day: "2026-09-19", country: "US", views: 5 },
@@ -131,9 +131,17 @@ describe("show_chart", () => {
       store
     );
     expect(line.artifact).toMatchObject({ type: "chart", chartType: "line" });
+
+    const bars = await run(
+      "show_chart",
+      { result_id: resultId, title: "By country", type: "bar", dimension: "day", metric: "views", series: "country" },
+      store
+    );
+    expect(bars.artifact).toMatchObject({ type: "chart", chartType: "bar" });
+
     await expect(
-      run("show_chart", { result_id: resultId, title: "x", type: "bar", dimension: "day", metric: "views", series: "country" }, store)
-    ).rejects.toThrow("series");
+      run("show_chart", { result_id: resultId, title: "x", type: "donut", dimension: "day", metric: "views", series: "country" }, store)
+    ).rejects.toThrow("one value per slice");
   });
 });
 
