@@ -174,8 +174,12 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           record.output = stored ? JSON.stringify({ result_id: stored.id, ...safeParse(output.text) }) : output.text;
           if (output.artifact) {
             record.artifact = output.artifact;
-            result.artifacts.push(output.artifact);
-            emit({ type: "artifact", artifact: output.artifact });
+            // Models repeat themselves; the same chart twice is a scroll of
+            // duplicated weight for the reader, not more information.
+            if (!result.artifacts.some(artifact => isSameArtifact(artifact, output.artifact!))) {
+              result.artifacts.push(output.artifact);
+              emit({ type: "artifact", artifact: output.artifact });
+            }
           }
         } catch (error) {
           record.ok = false;
@@ -249,6 +253,10 @@ function summarize(record: ToolCallRecord) {
 }
 
 const truncate = (value: string, max = 120) => (value.length > max ? `${value.slice(0, max)}…` : value);
+
+function isSameArtifact(left: Artifact, right: Artifact) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
 function addUsage(total: OpenRouterUsage, next: OpenRouterUsage): OpenRouterUsage {
   return {
