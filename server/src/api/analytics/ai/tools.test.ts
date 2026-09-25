@@ -243,6 +243,16 @@ describe("show_funnel", () => {
     });
   });
 
+  it("keeps the range the rows were counted over, so a link out of them lands in it", () => {
+    const store = new ResultStore();
+    const stored = store.add([{ value: "/", count: 3 }], "get_breakdown", {
+      range: { startDate: "2026-09-19", endDate: "2026-09-25" },
+    });
+    expect(stored?.range).toEqual({ startDate: "2026-09-19", endDate: "2026-09-25" });
+    // A preset range has no fixed window, so nothing is claimed.
+    expect(store.add([{ value: "/" }], "get_breakdown", { range: {} })?.range).toBeUndefined();
+  });
+
   it("refuses a result that did not come from get_funnel", async () => {
     const store = new ResultStore();
     const stored = store.add(funnelRows, "get_breakdown");

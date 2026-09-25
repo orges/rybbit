@@ -12,8 +12,19 @@ export type AnalystArtifact =
       points: Array<{ label: string; value: number; series?: string }>;
       /** The analytics tool that produced the rows, so the result can link to the page that owns it. */
       source?: string;
+      /** The window the points are over, so a link out of them lands in it. */
+      range?: { startDate: string; endDate: string };
     }
-  | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean; source?: string }
+  | {
+      type: "table";
+      title: string;
+      columns: string[];
+      rows: string[][];
+      total: number;
+      truncated: boolean;
+      source?: string;
+      range?: { startDate: string; endDate: string };
+    }
   | {
       type: "retention";
       title: string;

@@ -82,6 +82,12 @@ function formatCell(value: string) {
 
 function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact, { type: "table" }>; siteId: number }) {
   const sessionColumn = artifact.columns.indexOf(SESSION_COLUMN);
+  // A recording is only in the list for the window it happened in, so a link
+  // that left the range out landed the reader on an empty Replay page.
+  const replayHref = (session: string) => {
+    const window = artifact.range ? `&startDate=${artifact.range.startDate}&endDate=${artifact.range.endDate}` : "";
+    return `/${siteId}/replay?session=${encodeURIComponent(session)}${window}`;
+  };
   return (
     <div className="space-y-1.5">
       <div className="max-h-96 overflow-auto rounded-lg border border-neutral-150 dark:border-neutral-800">
@@ -102,7 +108,7 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
                   <TableCell key={cellIndex} className="max-w-80 truncate font-mono text-xs tabular-nums" title={cell}>
                     {cellIndex === sessionColumn && cell ? (
                       <a
-                        href={`/${siteId}/replay?session=${encodeURIComponent(cell)}`}
+                        href={replayHref(cell)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline underline-offset-2 hover:text-dataviz"

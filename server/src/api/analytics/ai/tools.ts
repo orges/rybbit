@@ -542,6 +542,9 @@ const getErrorEvents: AnalystTool = {
       // The stack and the message repeat on every row; the model needs the page,
       // the session and the context, not the same text twenty times.
       preview: { columns: ["timestamp", "message", "session_id", "hostname", "pathname", "country", "browser", "device_type"], limit: 20 },
+      // So a session link opens the recording inside the window the answer was
+      // about, rather than whatever range the dashboard happens to be on.
+      range: { startDate: range.startDate, endDate: range.endDate },
     };
   },
 };
