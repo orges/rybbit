@@ -181,7 +181,9 @@ function UnverifiedFigures({ figures }: { figures: string[] }) {
   return (
     <details className="rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-1.5 text-xs">
       <summary className="cursor-pointer text-amber-600 dark:text-amber-400">
-        {t("{count} figures in this answer are not in the tool results", { count: String(figures.length) })}
+        {t("{count, plural, one {# figure} other {# figures}} in this answer {count, plural, one {is} other {are}} not in the tool results", {
+          count: figures.length,
+        })}
       </summary>
       <p className="mt-1.5 text-neutral-600 dark:text-neutral-300">
         {t("Check these before quoting them — they may be rounded or mis-copied:")}
