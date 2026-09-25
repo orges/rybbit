@@ -10,8 +10,10 @@ export type AnalystArtifact =
       dimension: string;
       metric: string;
       points: Array<{ label: string; value: number; series?: string }>;
+      /** The analytics tool that produced the rows, so the result can link to the page that owns it. */
+      source?: string;
     }
-  | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean }
+  | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean; source?: string }
   | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 

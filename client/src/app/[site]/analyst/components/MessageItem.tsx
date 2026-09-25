@@ -3,7 +3,7 @@
 import { CalendarDays, Copy, Filter, Globe, RefreshCw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useState, type ReactNode } from "react";
-import type { ChatMessage, MessageContext } from "@/api/analyst/endpoints/analyst";
+import type { AnalystArtifact, ChatMessage, MessageContext } from "@/api/analyst/endpoints/analyst";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArtifactCard } from "./ArtifactCard";
@@ -120,11 +120,15 @@ export function MessageItem({
   onFollowup: (value: string) => void;
   siteId: number;
 }) {
-  // Each artifact was produced by a tool call, and the tool knows which page of
-  // the product owns that data.
-  const linkFor = (artifact: unknown) => {
-    const call = message.toolCalls?.find(entry => entry.artifact && JSON.stringify(entry.artifact) === JSON.stringify(artifact));
-    return call ? resultLink(call.name, call.input, siteId) : null;
+  // A chart or table is drawn by show_chart/show_table, but the data came from an
+  // analytics tool — the artifact carries that name so the link goes to the page
+  // that owns the data, not to a page for the drawing tool.
+  const linkFor = (artifact: AnalystArtifact) => {
+    if (!("source" in artifact) || !artifact.source) return null;
+    // The breakdown's dimension (which page it opens) is an argument of the
+    // analytics call that fetched the rows.
+    const sourceCall = message.toolCalls?.find(call => call.name === artifact.source);
+    return resultLink(artifact.source, sourceCall?.input, siteId);
   };
   const t = useExtracted();
 

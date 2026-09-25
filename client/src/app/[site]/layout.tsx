@@ -74,7 +74,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               !pathname.includes("/globe") &&
               !pathname.includes("/api-playground") &&
               !pathname.includes("/query") &&
-              !pathname.includes("/analyst") && <Footer disabled={embed} />}
+              !isAnalyst && <Footer disabled={embed} />}
           </div>
         </div>
       </div>

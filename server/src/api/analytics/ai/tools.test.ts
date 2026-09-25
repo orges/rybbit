@@ -87,6 +87,7 @@ describe("show_chart", () => {
         { label: "/", value: 10 },
         { label: "/pricing", value: 4 },
       ],
+      source: "get_breakdown",
     });
   });
 
@@ -162,6 +163,7 @@ describe("show_table", () => {
       ],
       total: 3,
       truncated: true,
+      source: "get_breakdown",
     });
   });
 

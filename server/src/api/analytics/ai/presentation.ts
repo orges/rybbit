@@ -15,6 +15,7 @@ export interface StoredResult {
   id: string;
   rows: ToolRow[];
   rowCount: number;
+  /** The analytics tool that produced the rows, not the one drawing them. */
   source: string;
   sql?: string;
 }
@@ -47,8 +48,9 @@ export type Artifact =
       dimension: string;
       metric: string;
       points: Array<{ label: string; value: number; series?: string }>;
+      source?: string;
     }
-  | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean }
+  | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean; source?: string }
   | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 
@@ -136,7 +138,7 @@ const showChart: AnalystTool = {
     if (type === "donut" && points.every(point => point.value <= 0)) {
       throw new Error("A donut needs at least one positive value");
     }
-    const artifact: Artifact = { type: "chart", title, chartType: type, dimension, metric, points };
+    const artifact: Artifact = { type: "chart", title, chartType: type, dimension, metric, points, source: result.source };
     return {
       text: `Chart "${title}" shown: ${points.length} points from ${result.source}.`,
       artifact,
@@ -202,6 +204,7 @@ const showTable: AnalystTool = {
       rows: rows.slice(0, take).map(row => columns.map(column => formatCell(row[column]))),
       total: rows.length,
       truncated: rows.length > take,
+      source: result.source,
     };
     return { text: `Table "${title}" shown: ${Math.min(take, rows.length)} of ${rows.length} rows from ${result.source}.`, artifact };
   },
