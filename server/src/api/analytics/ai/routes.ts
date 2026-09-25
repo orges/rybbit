@@ -46,7 +46,7 @@ const conversationParams = z.object({
   organizationId: z.string().min(1),
   conversationId: z.string().uuid().optional(),
 });
-const siteQuery = z.object({ siteId: z.coerce.number().int().positive() });
+const siteQuery = z.object({ siteId: z.coerce.number().int().positive(), search: z.string().max(200).optional() });
 
 /**
  * Resolves the caller's access to the Site the question is about. Every route
@@ -246,7 +246,7 @@ export async function handleConversations(
 
   try {
     if (!conversationId) {
-      return reply.send(await store.listConversations(userId, organizationId, siteId));
+      return reply.send(await store.listConversations(userId, organizationId, siteId, query.data.search));
     }
     const conversation = await store.findConversation(userId, organizationId, siteId, conversationId);
     if (!conversation) return reply.status(404).send({ error: "Conversation not found" });

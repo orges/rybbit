@@ -1,8 +1,8 @@
 "use client";
 
-import { MessageSquarePlus, Pencil, Search, Trash2, X } from "lucide-react";
+import { MessageSquarePlus, Pencil, Trash2, X } from "lucide-react";
 import { useExtracted } from "next-intl";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ConversationSummary } from "@/api/analyst/endpoints/analyst";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,8 @@ export function ConversationRail({
   onToggle,
   loading,
   className,
+  search,
+  onSearch,
 }: {
   conversations: ConversationSummary[];
   activeId: string | null;
@@ -48,16 +50,12 @@ export function ConversationRail({
   onToggle: () => void;
   loading?: boolean;
   className?: string;
+  search: string;
+  onSearch: (value: string) => void;
 }) {
   const t = useExtracted();
-  const [search, setSearch] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return query ? conversations.filter(conversation => conversation.title.toLowerCase().includes(query)) : conversations;
-  }, [conversations, search]);
 
   if (collapsed) {
     return (
@@ -102,7 +100,7 @@ export function ConversationRail({
           inputSize="sm"
           isSearch
           value={search}
-          onChange={event => setSearch(event.target.value)}
+          onChange={event => onSearch(event.target.value)}
           placeholder={t("Search chats")}
           aria-label={t("Search chats")}
           className="h-7"
@@ -110,13 +108,13 @@ export function ConversationRail({
       </div>
       <nav aria-label={t("Chat history")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {loading && !conversations.length && <p className="px-1.5 py-1 text-xs text-neutral-500">{t("Loading…")}</p>}
-        {!loading && !filtered.length && (
+        {!loading && !conversations.length && (
           <p className="px-1.5 py-1 text-xs text-neutral-500 dark:text-neutral-400">
             {search ? t("No matching chats") : t("No chats yet")}
           </p>
         )}
         <ul className="space-y-0.5">
-          {filtered.map(conversation => (
+          {conversations.map(conversation => (
             <li key={conversation.id}>
               {renaming === conversation.id ? (
                 <div className="flex items-center gap-1">
@@ -147,6 +145,11 @@ export function ConversationRail({
                     )}
                   >
                     <span className="block truncate text-xs font-medium">{conversation.title}</span>
+                    {conversation.snippet ? (
+                      <span className="mt-0.5 block line-clamp-2 text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
+                        {conversation.snippet}
+                      </span>
+                    ) : null}
                     <span className="block text-[10px] text-neutral-500 dark:text-neutral-400">{relativeTime(conversation.updatedAt)}</span>
                   </button>
                   <div className="absolute right-1 top-1 hidden items-center gap-0.5 group-hover/thread:flex">
@@ -178,7 +181,6 @@ export function ConversationRail({
           ))}
         </ul>
       </nav>
-      {search && <Search className="sr-only" />}
     </aside>
   );
 }

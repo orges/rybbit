@@ -71,3 +71,27 @@ describe("asUtcIso", () => {
     expect(asUtcIso(undefined)).toBeUndefined();
   });
 });
+
+describe("snippetAround", () => {
+  it("shows the run of text around the match", async () => {
+    const { __testing } = await import("./store.js");
+    const content =
+      "Traffic is down 63% compared to last week. Both sessions and pageviews declined noticeably, " +
+      "and the decline is proportional across every channel we measured this week against last week.";
+    expect(__testing.snippetAround(content, "proportional")).toBe(
+      "…sions and pageviews declined noticeably, and the decline is proportional across every channel we " +
+        "measured this week against last week."
+    );
+  });
+
+  it("leads with the match when it is near the start", async () => {
+    const { __testing } = await import("./store.js");
+    expect(__testing.snippetAround("bounce rate fell to 34%", "bounce")).toBe("bounce rate fell to 34%");
+  });
+
+  it("escapes a LIKE wildcard so it is searched for literally", async () => {
+    const { likeTerm } = await import("./store.js");
+    expect(likeTerm("100%_bounce")).toBe("%100\\%\\_bounce%");
+    expect(likeTerm("  padded  ")).toBe("%padded%");
+  });
+});

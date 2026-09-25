@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "../../../db/postgres/postgres.js";
 import { aiConversations, aiFeedback, aiMemories, aiMessages, aiRuns } from "../../../db/postgres/schema.js";
 import type { Artifact } from "./presentation.js";
@@ -63,21 +63,65 @@ export async function findConversation(userId: string, organizationId: string, s
   return row;
 }
 
-export async function listConversations(userId: string, organizationId: string, siteId: number) {
+export async function listConversations(
+  userId: string,
+  organizationId: string,
+  siteId: number,
+  search?: string
+) {
+  const owner = and(
+    eq(aiConversations.userId, userId),
+    eq(aiConversations.organizationId, organizationId),
+    eq(aiConversations.siteId, siteId)
+  );
+
+  // A search term looks in what was actually said, not just in the title: people
+  // remember the question they asked, and the title is only its first words.
+  if (search?.trim()) {
+    const term = likeTerm(search);
+    const hits = await db
+      .selectDistinct({ id: aiConversations.id, content: aiMessages.content })
+      .from(aiConversations)
+      .innerJoin(aiMessages, eq(aiMessages.conversationId, aiConversations.id))
+      .where(and(owner, or(ilike(aiMessages.content, term), ilike(aiConversations.title, term))))
+      .limit(200);
+    if (!hits.length) return [];
+    const byId = new Map(hits.map(hit => [hit.id, hit.content]));
+    const rows = await db
+      .select({ id: aiConversations.id, title: aiConversations.title, updatedAt: aiConversations.updatedAt })
+      .from(aiConversations)
+      .where(and(owner, inArray(aiConversations.id, [...byId.keys()])))
+      .orderBy(desc(aiConversations.updatedAt))
+      .limit(50);
+    return rows.map(row => ({
+      ...row,
+      updatedAt: asUtcIso(row.updatedAt) ?? row.updatedAt,
+      snippet: snippetAround(byId.get(row.id) ?? "", search.trim()),
+    }));
+  }
+
   // ponytail: newest 50 threads; add cursor pagination when a Site needs more.
   return db
     .select({ id: aiConversations.id, title: aiConversations.title, updatedAt: aiConversations.updatedAt })
     .from(aiConversations)
-    .where(
-      and(
-        eq(aiConversations.userId, userId),
-        eq(aiConversations.organizationId, organizationId),
-        eq(aiConversations.siteId, siteId)
-      )
-    )
+    .where(owner)
     .orderBy(desc(aiConversations.updatedAt))
     .limit(50)
     .then(rows => rows.map(row => ({ ...row, updatedAt: asUtcIso(row.updatedAt) ?? row.updatedAt })));
+}
+
+/** Wraps a search term for ILIKE, escaping the wildcards a user may type. */
+export function likeTerm(search: string) {
+  return `%${search.trim().replace(/[%_\\]/g, match => `\\${match}`)}%`;
+}
+
+/** The run of text around the match, so a search result says why it matched. */
+function snippetAround(content: string, term: string) {
+  const at = content.toLowerCase().indexOf(term.toLowerCase());
+  if (at === -1) return undefined;
+  const start = Math.max(0, at - 60);
+  const end = Math.min(content.length, at + term.length + 90);
+  return `${start > 0 ? "…" : ""}${content.slice(start, end).replace(/\s+/g, " ").trim()}${end < content.length ? "…" : ""}`;
 }
 
 export async function createConversation(input: {
@@ -218,6 +262,7 @@ export async function listMemories(organizationId: string, siteId: number) {
     .then(rows => rows.map(row => ({ ...row, createdAt: asUtcIso(row.createdAt) ?? row.createdAt })));
 }
 
+export const __testing = { snippetAround };
 export { asUtcIso };
 
 export async function addMemory(input: {

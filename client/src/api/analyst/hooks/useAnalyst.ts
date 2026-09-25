@@ -12,15 +12,16 @@ import {
 } from "../endpoints/analyst";
 
 export const analystKeys = {
-  conversations: (organizationId: string, siteId: number) => ["analyst", "conversations", organizationId, siteId] as const,
+  conversations: (organizationId: string, siteId: number, search = "") =>
+    ["analyst", "conversations", organizationId, siteId, search] as const,
   conversation: (organizationId: string, siteId: number, id: string) => ["analyst", "conversation", organizationId, siteId, id] as const,
   memories: (organizationId: string, siteId: number) => ["analyst", "memories", organizationId, siteId] as const,
 };
 
-export function useConversations(organizationId: string | undefined, siteId: number, enabled = true) {
+export function useConversations(organizationId: string | undefined, siteId: number, search = "", enabled = true) {
   return useQuery({
-    queryKey: analystKeys.conversations(organizationId ?? "", siteId),
-    queryFn: () => listConversations(organizationId!, siteId),
+    queryKey: analystKeys.conversations(organizationId ?? "", siteId, search),
+    queryFn: () => listConversations(organizationId!, siteId, search || undefined),
     enabled: enabled && !!organizationId,
     staleTime: 30_000,
   });
@@ -38,7 +39,7 @@ export function useDeleteConversation(organizationId: string, siteId: number) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteConversation(organizationId, siteId, id),
-    onSuccess: () => client.invalidateQueries({ queryKey: analystKeys.conversations(organizationId, siteId) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["analyst", "conversations", organizationId, siteId] }),
   });
 }
 
@@ -46,7 +47,7 @@ export function useRenameConversation(organizationId: string, siteId: number) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => renameConversation(organizationId, siteId, id, title),
-    onSuccess: () => client.invalidateQueries({ queryKey: analystKeys.conversations(organizationId, siteId) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["analyst", "conversations", organizationId, siteId] }),
   });
 }
 

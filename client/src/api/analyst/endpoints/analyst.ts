@@ -75,14 +75,14 @@ export interface SendMessageRequest {
   context?: MessageContext;
 }
 
-export type ConversationSummary = { id: string; title: string; updatedAt: string };
+export type ConversationSummary = { id: string; title: string; updatedAt: string; snippet?: string };
 
 export type ConversationDetail = { id: string; title: string; messages: ChatMessage[] };
 
 const conversationsUrl = (organizationId: string) => `/organizations/${organizationId}/analytics/conversations`;
 
-export function listConversations(organizationId: string, siteId: number) {
-  return authedFetch<ConversationSummary[]>(`${conversationsUrl(organizationId)}`, { siteId });
+export function listConversations(organizationId: string, siteId: number, search?: string) {
+  return authedFetch<ConversationSummary[]>(`${conversationsUrl(organizationId)}`, { siteId, ...(search ? { search } : {}) });
 }
 
 export function getConversation(organizationId: string, siteId: number, id: string) {

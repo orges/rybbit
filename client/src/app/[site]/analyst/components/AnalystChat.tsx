@@ -2,7 +2,7 @@
 
 import { ArrowDown, MessageSquareText, Sparkles } from "lucide-react";
 import { useExtracted } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import {
   getConversation,
@@ -45,6 +45,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const timeZone = useTimezone();
 
   const [draft, setDraft] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [follow, setFollow] = useState(true);
@@ -62,7 +63,9 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
     };
   }, [filters, selectedStat, time, timeZone]);
 
-  const conversations = useConversations(organizationId, siteId);
+  // Deferred so a search runs once the typing settles, not once per keystroke.
+  const conversationSearch = useDeferredValue(chatSearch);
+  const conversations = useConversations(organizationId, siteId, conversationSearch);
   const removeConversation = useDeleteConversation(organizationId, siteId);
   const renameConversation = useRenameConversation(organizationId, siteId);
   const addMemory = useAddMemory(organizationId, siteId);
@@ -170,6 +173,8 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
           activeId={conversationId}
           loading={conversations.isLoading}
           collapsed={railCollapsed}
+          search={chatSearch}
+          onSearch={setChatSearch}
           onToggle={() => {
             setRailOpen(false);
             setRailCollapsed(value => !value);
