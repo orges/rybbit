@@ -1,3 +1,13 @@
+-- The analyst was rebuilt on top of a real agent loop, and the first cut's
+-- conversation tables stored one row per SQL summary. Drop them before
+-- recreating: nothing else references them, and their shape cannot be migrated
+-- into the message-level transcript this feature needs.
+DROP TABLE IF EXISTS "ai_messages";
+DROP TABLE IF EXISTS "ai_feedback";
+DROP TABLE IF EXISTS "ai_runs";
+DROP TABLE IF EXISTS "ai_memories";
+DROP TABLE IF EXISTS "ai_conversations";
+--> statement-breakpoint
 CREATE TABLE "ai_conversations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" text NOT NULL,
