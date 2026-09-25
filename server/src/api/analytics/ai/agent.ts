@@ -77,6 +77,10 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     { role: "user", content: options.question },
   ];
 
+  // The model sometimes re-runs the same statement after a tool call failed.
+  // Answering from the first run keeps the transcript honest and stops the loop.
+  const sqlCache = new Map<string, ToolCallRecord>();
+
   const result: AgentResult = {
     text: "",
     reasoning: "",
@@ -155,8 +159,12 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       const args = parseArguments(call.function.arguments);
       emit({ type: "tool_start", id: call.id, name, input: args });
       const record: ToolCallRecord = { id: call.id, name, input: args, output: "", ok: true, durationMs: 0 };
-      const tool = ALL_TOOLS.get(name);
-      if (!tool) {
+      const cached = name === "run_sql" ? sqlCache.get(String(args.sql ?? "")) : undefined;
+      const tool = cached ? undefined : ALL_TOOLS.get(name);
+      if (cached) {
+        record.ok = cached.ok;
+        record.output = `${cached.output}\n(Reused: this exact query already ran in this turn.)`;
+      } else if (!tool) {
         record.ok = false;
         record.output = `Unknown tool "${name}". Available tools: ${[...ALL_TOOLS.keys()].join(", ")}`;
       } else {
@@ -174,6 +182,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           record.output = toolFailure(name, error);
         }
       }
+      if (name === "run_sql" && record.ok) sqlCache.set(String(args.sql ?? ""), record);
       record.durationMs = Date.now() - started;
       result.toolCalls.push(record);
       emit({

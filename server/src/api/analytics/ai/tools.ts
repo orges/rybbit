@@ -545,7 +545,9 @@ const searchReplays: AnalystTool = {
   },
 };
 
-const MAX_SQL_ROWS = 200;
+// The scoped query already caps at 1000 rows. Keep the whole set so a chart can
+// plot it; only the copy handed to the model is shortened.
+const MAX_SQL_ROWS = 1000;
 
 const runSql: AnalystTool = {
   name: "run_sql",
@@ -601,7 +603,14 @@ export function toolFailure(name: string, error: unknown) {
   return `Tool "${name}" failed: ${sanitizeToolMessage(message)}. Fix the arguments and try again, or answer without it.`;
 }
 
+/**
+ * ClickHouse errors can name tables, columns and settings, so they go through the
+ * same scrubber the Query page uses. The model's own argument errors must not:
+ * "column X is not in r1" is exactly what it needs to correct itself, and the
+ * scrubber would flatten it to "Failed to run query".
+ */
 function sanitizeToolMessage(message: string) {
+  if (!/DB::Exception|Code: \d+/.test(message)) return message.slice(0, 300);
   try {
     return sanitizeClickhouseError(new Error(message));
   } catch {
