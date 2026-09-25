@@ -84,8 +84,12 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
   const sessionColumn = artifact.columns.indexOf(SESSION_COLUMN);
   // A recording is only in the list for the window it happened in, so a link
   // that left the range out landed the reader on an empty Replay page.
+  // `timeMode` is what tells the dashboard to read the dates from the URL rather
+  // than from its own last-used range; without it both are overwritten.
   const replayHref = (session: string) => {
-    const window = artifact.range ? `&startDate=${artifact.range.startDate}&endDate=${artifact.range.endDate}` : "";
+    const window = artifact.range
+      ? `&timeMode=range&startDate=${artifact.range.startDate}&endDate=${artifact.range.endDate}`
+      : "";
     return `/${siteId}/replay?session=${encodeURIComponent(session)}${window}`;
   };
   return (
