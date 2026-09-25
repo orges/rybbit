@@ -4,6 +4,7 @@ import { buildEventNamesQuery } from "../events/getEventNames.js";
 import { buildEventPropertiesQuery } from "../events/getEventProperties.js";
 import { buildErrorBucketedQuery } from "../getErrorBucketed.js";
 import { buildErrorNamesQuery, type ErrorNameItem } from "../getErrorNames.js";
+import { buildErrorEventsQuery } from "../getErrorEvents.js";
 import { buildFunnelQuery } from "../funnels/getFunnel.js";
 import { buildJourneysQuery } from "../getJourneys.js";
 import { buildMetricQuery } from "../getMetric.js";
@@ -506,6 +507,45 @@ const getFunnel: AnalystTool = {
   },
 };
 
+const getErrorEvents: AnalystTool = {
+  name: "get_error_events",
+  description:
+    "The individual occurrences of one exact error message: when it happened, which page and browser it happened on, and the session it happened in — session_id opens that recording in Replay. Pass the message exactly as get_errors returned it.",
+  parameters: {
+    type: "object",
+    properties: {
+      error_message: { type: "string", description: "The exact error message from get_errors" },
+      time: timeShape,
+      limit: { type: "integer", minimum: 1, maximum: 50 },
+    },
+    required: ["error_message"],
+  },
+  async run(args, ctx) {
+    const message = z.string().min(1).max(2000).safeParse(args.error_message);
+    if (!message.success) throw new Error("error_message is required, exactly as get_errors returned it");
+    const range = rangeFor(args, ctx);
+    const rows = await query<ToolRow>({
+      query: buildErrorEventsQuery(
+        { ...baseParams(ctx, range), errorMessage: message.data, limit: Math.min(Number(args.limit ?? 20), 50) },
+        ctx.siteId
+      ),
+      params: { siteId: ctx.siteId, errorMessage: message.data },
+    });
+    return {
+      text: JSON.stringify({
+        range: range.label,
+        error_message: message.data,
+        count: rows.length,
+        sessions: [...new Set(rows.map(row => String(row.session_id ?? "")).filter(Boolean))].slice(0, 20),
+      }),
+      rows,
+      // The stack and the message repeat on every row; the model needs the page,
+      // the session and the context, not the same text twenty times.
+      preview: { columns: ["timestamp", "message", "session_id", "hostname", "pathname", "country", "browser", "device_type"], limit: 20 },
+    };
+  },
+};
+
 const getJourneys: AnalystTool = {
   name: "get_journeys",
   description: "The most common sequences of pages inside a session, ranked by how many sessions took them.",
@@ -616,6 +656,7 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   listEventNames,
   getEventProperties,
   getErrors,
+  getErrorEvents,
   getWebVitals,
   getRetention,
   getFunnel,

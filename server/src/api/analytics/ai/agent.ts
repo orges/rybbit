@@ -234,8 +234,16 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   }
 
   // The answer is only as trustworthy as the numbers in it. Anything that does
-  // not appear in a tool result is surfaced rather than passed off as data.
-  result.unverified = unsupportedFigures(result.text, result.toolCalls.map(record => record.output));
+  // not appear in a tool result is surfaced rather than passed off as data —
+  // but the model's context is wider than this turn: quoting a figure from an
+  // earlier answer, or the one the user just asked about, is fair game, and
+  // flagging those would teach the reader to ignore the flag.
+  const inContext = [
+    ...result.toolCalls.map(record => record.output),
+    ...options.history.filter(message => message.role === "assistant").map(message => String(message.content ?? "")),
+    options.question,
+  ];
+  result.unverified = unsupportedFigures(result.text, inContext);
   if (result.unverified.length) emit({ type: "unverified", figures: result.unverified });
 
   emit({ type: "done", stopped: result.stopped, steps: result.steps });

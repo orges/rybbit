@@ -46,6 +46,15 @@ describe("unsupportedFigures", () => {
     expect(unsupportedFigures("First 71,001 then 55,555 and 71,001 again.", [overview])).toEqual(["71,001", "55,555"]);
   });
 
+  it("accepts a figure the reader can see quoted from an earlier turn", () => {
+    // The model's context holds the whole thread, so a number it is repeating
+    // back is supported even though this turn's tools never said it.
+    const thread = ["Last week had 19,048 sessions."];
+    expect(unsupportedFigures("As I said, 19,048 sessions last week; 20,501 this week.", [overview, ...thread])).toEqual([
+      "20,501",
+    ]);
+  });
+
   it("has nothing to check when the answer is empty, and flags everything when no tool ran", () => {
     expect(unsupportedFigures("", [overview])).toEqual([]);
     expect(unsupportedFigures("Traffic is down.", [])).toEqual([]);
