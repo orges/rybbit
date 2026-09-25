@@ -5,7 +5,9 @@ import { useMemo } from "react";
 import type { CustomQueryRow } from "@/api/analytics/endpoints";
 import { TimeSeriesChart, type TimeSeriesChartSeries } from "@/components/charts/TimeSeriesChart";
 import { getChartTimeBounds } from "@/components/charts/timeSeriesChartUtils";
+import { DateTime } from "luxon";
 import { getTimezone, useStore } from "@/lib/store";
+import type { Time } from "@/components/DateSelector/types";
 import { formatter } from "@/lib/utils";
 import { buildChartAxis, buildWideData, inferChartBucket, parseChartDate } from "../../utils";
 import { CardLegend, ChartEmpty, DashboardTooltip, toCardSeries } from "./shared";
@@ -99,6 +101,21 @@ export function DashboardLineChart({ rows, mapping, area = false, standalone = f
 
   const multi = series.length > 1;
 
+  // A standalone chart has no dashboard range to label itself with, so it states
+  // the one its own points cover. No start/end times, so the ticks fall back to
+  // "Sep 19" rather than the time-of-day a dashboard would use.
+  const standaloneTime = useMemo(
+    () =>
+      chartMin && chartMax
+        ? ({
+            mode: "range",
+            startDate: DateTime.fromJSDate(chartMin, { zone: timezone }).toFormat("yyyy-MM-dd"),
+            endDate: DateTime.fromJSDate(chartMax, { zone: timezone }).toFormat("yyyy-MM-dd"),
+          } as Time)
+        : undefined,
+    [chartMin, chartMax, timezone]
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1">
@@ -111,6 +128,7 @@ export function DashboardLineChart({ rows, mapping, area = false, standalone = f
           chartMin={chartMin}
           chartMax={chartMax}
           bucket={bucket}
+          {...(standaloneTime ? { time: standaloneTime } : {})}
           disableDragZoom
           yTickFormat={formatter}
           renderTooltip={({ point, points }) => {
