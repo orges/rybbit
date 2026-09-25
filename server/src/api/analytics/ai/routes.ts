@@ -261,10 +261,11 @@ export async function handleConversations(
       const updated = await store.renameConversation(conversationId, title.data.title);
       return reply.send(updated);
     }
+    const rows = await store.allMessages(conversationId);
     return reply.send({
       id: conversation.id,
       title: conversation.title,
-      messages: await store.allMessages(conversationId),
+      messages: rows.map(store.toClientMessage),
     });
   } catch (error) {
     request.log.error(error, "Failed to access AI conversations");

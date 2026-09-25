@@ -137,6 +137,37 @@ export async function allMessages(conversationId: string) {
     .orderBy(aiMessages.createdAt);
 }
 
+/**
+ * Flattens a stored row into the message shape the client renders.
+ *
+ * `parts` is one JSON column so a turn stays atomic, but the UI reads the tool
+ * trail, artifacts and usage as fields of the message. Without this the client
+ * would have to know about storage.
+ */
+export function toClientMessage(row: {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  parts: Record<string, unknown> | null;
+  createdAt?: string;
+}) {
+  const parts = (row.parts ?? {}) as AssistantParts & { context?: unknown };
+  if (row.role === "user") {
+    return { id: row.id, role: row.role, content: row.content, ...(row.createdAt ? { createdAt: row.createdAt } : {}), context: parts.context };
+  }
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+    ...(parts.reasoning ? { reasoning: parts.reasoning } : {}),
+    ...(parts.toolCalls?.length ? { toolCalls: parts.toolCalls } : {}),
+    ...(parts.artifacts?.length ? { artifacts: parts.artifacts } : {}),
+    ...(parts.usage ? { usage: parts.usage } : {}),
+    ...(parts.model ? { model: parts.model } : {}),
+    ...(parts.stopped ? { stopped: parts.stopped } : {}),
+  };
+}
 /** Removes the trailing assistant turn so a retry can replace it. */
 export async function dropLastAssistantMessage(conversationId: string) {
   const rows = await db
