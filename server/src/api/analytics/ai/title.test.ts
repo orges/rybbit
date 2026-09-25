@@ -7,6 +7,18 @@ describe("deriveTitle", () => {
     expect(deriveTitle("What are the top custom events today?")).toBe("Top custom events today");
   });
 
+  it("names the thread after the data, not the request to draw it", () => {
+    expect(deriveTitle("Draw a line chart of daily sessions over the last 7 days")).toBe(
+      "Daily sessions over the last 7 days"
+    );
+    expect(deriveTitle("plot a bar chart for the top 10 pages")).toBe("Top 10 pages");
+    expect(deriveTitle("Chart weekly users by country")).toBe("Weekly users by country");
+  });
+
+  it("leaves a chart asked for as a subject alone", () => {
+    expect(deriveTitle("Chart of daily sessions by channel")).toBe("Chart of daily sessions by channel");
+  });
+
   it("keeps a long question to a scannable length", () => {
     const title = deriveTitle(
       "compare sessions, pageviews, users, bounce rate and average session duration between this week and the previous one"
