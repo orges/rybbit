@@ -49,6 +49,7 @@ export type Artifact =
       points: Array<{ label: string; value: number; series?: string }>;
     }
   | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean }
+  | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 
 export interface PresentationOutput extends ToolOutput {
@@ -199,4 +200,28 @@ const formatCell = (value: unknown) => {
   return String(value).slice(0, 300);
 };
 
-export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable];
+const suggestFollowups: AnalystTool = {
+  name: "suggest_followups",
+  description:
+    "Offer up to four short questions the user is likely to ask next, drawn from what the data actually showed. Use it once, at the end of a complete answer, when there is an obvious next step — a drill-down, a comparison, or a different dimension.",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "A short label, such as \"Dig deeper\"" },
+      options: { type: "array", items: { type: "string" }, description: "2 to 4 complete questions" },
+    },
+    required: ["title", "options"],
+  },
+  async run(args) {
+    const parsed = z
+      .object({ title: z.string().min(1).max(60), options: z.array(z.string().min(4).max(120)).min(2).max(4) })
+      .safeParse(args);
+    if (!parsed.success) throw new Error("Give a title and 2 to 4 questions of a few words each");
+    return {
+      text: `Follow-up suggestions shown: ${parsed.data.options.join(" | ")}`,
+      artifact: { type: "followups", title: parsed.data.title, options: parsed.data.options },
+    };
+  },
+};
+
+export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable, suggestFollowups];

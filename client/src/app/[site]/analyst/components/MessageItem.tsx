@@ -110,10 +110,12 @@ export function MessageItem({
   message,
   onRetry,
   onFeedback,
+  onFollowup,
 }: {
   message: ChatMessage;
   onRetry: () => void;
   onFeedback: (rating: number) => void;
+  onFollowup: (value: string) => void;
 }) {
   const t = useExtracted();
 
@@ -134,7 +136,7 @@ export function MessageItem({
       <ToolActivity reasoning={message.reasoning} toolCalls={message.toolCalls} running={message.pending && !hasContent} />
       {hasContent && <Markdown>{message.content}</Markdown>}
       {(message.artifacts ?? []).map((artifact, index) => (
-        <ArtifactCard key={index} artifact={artifact} />
+        <ArtifactCard key={index} artifact={artifact} onFollowup={onFollowup} />
       ))}
       {message.error && (
         <p role="alert" className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400">
@@ -145,6 +147,12 @@ export function MessageItem({
       {message.pending && !hasContent && !message.toolCalls?.length && <ThinkingDots />}
       {message.stopped && <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{t("Stopped")}</p>}
       {hasContent && !message.pending && <MessageActions message={message} onRetry={onRetry} onFeedback={onFeedback} />}
+      {message.usage?.completion_tokens ? (
+        <p className="text-[10px] tabular-nums text-neutral-400">
+          {`${message.usage.prompt_tokens ?? 0} in · ${message.usage.completion_tokens} out`}
+          {message.model ? ` · ${message.model}` : ""}
+        </p>
+      ) : null}
     </div>
   );
 }

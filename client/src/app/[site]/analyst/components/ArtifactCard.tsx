@@ -96,7 +96,30 @@ function ArtifactTable({ artifact }: { artifact: Extract<AnalystArtifact, { type
   );
 }
 
-export function ArtifactCard({ artifact }: { artifact: AnalystArtifact }) {
+function Followups({ artifact, onPick }: { artifact: Extract<AnalystArtifact, { type: "followups" }>; onPick: (value: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{artifact.title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {artifact.options.map(option => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onPick(option)}
+            className="rounded-md border border-neutral-150 px-2 py-1 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-850 dark:text-neutral-200 dark:hover:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ArtifactCard({ artifact, onFollowup }: { artifact: AnalystArtifact; onFollowup?: (value: string) => void }) {
+  if (artifact.type === "followups" && onFollowup) {
+    return <Followups artifact={artifact} onPick={onFollowup} />;
+  }
   if (artifact.type === "sql") {
     return (
       <div className="space-y-1.5">
@@ -110,7 +133,11 @@ export function ArtifactCard({ artifact }: { artifact: AnalystArtifact }) {
   return (
     <figure className="space-y-2 rounded-lg border border-neutral-150 bg-white p-3 dark:border-neutral-850 dark:bg-neutral-900">
       <figcaption className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{artifact.title}</figcaption>
-      {artifact.type === "chart" ? <Chart artifact={artifact} /> : <ArtifactTable artifact={artifact} />}
+      {artifact.type === "chart" ? (
+        <Chart artifact={artifact} />
+      ) : artifact.type === "table" ? (
+        <ArtifactTable artifact={artifact} />
+      ) : null}
     </figure>
   );
 }

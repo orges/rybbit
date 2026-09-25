@@ -112,7 +112,7 @@ export function ToolActivity({
             {running ? t("Thinking…") : t("Reasoning")}
             <ChevronRight className={cn("ml-auto size-3.5 text-neutral-400 transition-transform", showReasoning && "rotate-90")} />
           </button>
-          {(showReasoning || running) && reasoning && (
+          {(showReasoning || (running && !reasoning)) && reasoning && (
             <p className="px-2.5 pb-2 text-[11px] leading-relaxed whitespace-pre-wrap text-neutral-500 dark:text-neutral-400">
               {reasoning}
             </p>

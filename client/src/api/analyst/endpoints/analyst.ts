@@ -12,6 +12,7 @@ export type AnalystArtifact =
       points: Array<{ label: string; value: number; series?: string }>;
     }
   | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean }
+  | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 
 export interface ToolCallView {

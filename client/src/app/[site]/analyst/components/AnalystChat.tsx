@@ -48,6 +48,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [follow, setFollow] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const context = useMemo<MessageContext>(() => {
     const { startDate, endDate } = getStartAndEndDate(time, timeZone);
@@ -106,6 +107,24 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
     const remember = /^\/remember\s+([\s\S]+)$/.exec(text);
     if (remember) {
       addMemory.mutate(remember[1].trim(), { onSuccess: () => toast.success(t("Remembered for this site")) });
+      setDraft("");
+      return;
+    }
+    if (/^\/usage$/i.test(text)) {
+      const totals = messages.reduce(
+        (sum, message) => ({
+          prompt: sum.prompt + (message.usage?.prompt_tokens ?? 0),
+          completion: sum.completion + (message.usage?.completion_tokens ?? 0),
+        }),
+        { prompt: 0, completion: 0 }
+      );
+      toast(
+        t("This chat used {prompt} input and {completion} output tokens", {
+          prompt: String(totals.prompt),
+          completion: String(totals.completion),
+        }),
+        { icon: "⚡" }
+      );
       setDraft("");
       return;
     }
@@ -183,6 +202,10 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
                     message={message}
                     onRetry={() => retry(message)}
                     onFeedback={rating => void feedback(message, rating)}
+                    onFollowup={value => {
+                      setDraft(value);
+                      composerRef.current?.focus();
+                    }}
                   />
                 ))
               )}
@@ -208,6 +231,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
           )}
 
           <ChatComposer
+            inputRef={composerRef}
             value={draft}
             onChange={setDraft}
             onSubmit={submit}

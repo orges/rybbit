@@ -216,21 +216,27 @@ function safeParse(text: string): Record<string, unknown> {
   }
 }
 
+/** One line per tool for the activity trail: scalars first, counts for the rest. */
 function summarize(record: ToolCallRecord) {
-  if (!record.ok) return record.output.slice(0, 200);
-  const text = record.output.slice(0, 400);
+  if (!record.ok) return truncate(record.output, 160);
+  let parsed: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    const { result_id, ...rest } = parsed;
-    const detail = Object.entries(rest)
-      .filter(([, value]) => value !== undefined && !(Array.isArray(value) && value.length === 0))
-      .slice(0, 3)
-      .map(([key, value]) => `${key}: ${Array.isArray(value) ? `${value.length} rows` : truncate(String(value))}`)
-      .join(", ");
-    return `${result_id ? `${result_id} · ` : ""}${detail || "ok"}`;
+    parsed = JSON.parse(record.output) as Record<string, unknown>;
   } catch {
-    return truncate(text);
+    return truncate(record.output, 120);
   }
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(parsed)) {
+    if (key === "result_id" || value == null) continue;
+    if (typeof value === "number" || typeof value === "boolean") parts.push(`${key}: ${value}`);
+    else if (typeof value === "string" && value.length <= 48) parts.push(`${key}: ${value}`);
+    else if (Array.isArray(value)) {
+      if (value.every(entry => typeof entry !== "object")) parts.push(`${key}: ${truncate(value.map(String).join(", "), 48)}`);
+      else parts.push(`${key}: ${value.length}`);
+    }
+    if (parts.length >= 3) break;
+  }
+  return parts.join(" · ") || "done";
 }
 
 const truncate = (value: string, max = 120) => (value.length > max ? `${value.slice(0, max)}…` : value);

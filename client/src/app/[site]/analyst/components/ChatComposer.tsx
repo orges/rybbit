@@ -21,6 +21,7 @@ export function ChatComposer({
   streaming,
   disabled,
   placeholder,
+  inputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -29,9 +30,11 @@ export function ChatComposer({
   streaming: boolean;
   disabled?: boolean;
   placeholder?: string;
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const t = useExtracted();
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const localRef = useRef<HTMLTextAreaElement>(null);
+  const ref = inputRef ?? localRef;
 
   useEffect(() => {
     const element = ref.current;
