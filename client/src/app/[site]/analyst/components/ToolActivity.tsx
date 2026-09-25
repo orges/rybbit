@@ -22,6 +22,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_event_names: "List event names",
   get_event_properties: "Inspect event properties",
   get_errors: "Read error tracking",
+  get_error_events: "Read error occurrences",
   get_web_vitals: "Read web vitals",
   get_retention: "Read retention",
   get_funnel: "Read funnel",
@@ -30,8 +31,57 @@ const TOOL_LABELS: Record<string, string> = {
   run_sql: "Run a custom query",
   show_chart: "Draw a chart",
   show_table: "Show a table",
+  show_retention: "Draw the retention cohorts",
+  show_funnel: "Draw the funnel",
   suggest_followups: "Suggest follow-ups",
 };
+
+/** Arguments the reader never needs to see on the row. */
+const HIDDEN_ARGS = new Set(["result_id", "title", "sql", "error_message", "options"]);
+
+/**
+ * What the tool was asked, in words rather than keys.
+ *
+ * The row used to lead with the tool's own output, which is the model's JSON:
+ * "columns: cohort_period, period_difference, cohort_size…". Those column names
+ * are plumbing for the model — the reader asked for a breakdown by pathname, so
+ * that is what the row should say. The raw output is still there when the row is
+ * opened.
+ */
+export function describeInput(input: Record<string, unknown> | undefined): string {
+  if (!input) return "";
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(input)) {
+    if (HIDDEN_ARGS.has(key) || value === undefined || value === null || value === "") continue;
+    if (key === "time" || key === "range") {
+      const range = describeRange(value);
+      if (range) parts.push(range);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      if (!value.length) continue;
+      parts.push(key === "steps" ? `${value.length} steps` : `${key}: ${value.map(String).join(", ")}`);
+      continue;
+    }
+    if (typeof value === "object") continue;
+    if (key === "dimension") parts.push(`by ${String(value)}`);
+    else if (key === "limit") parts.push(`top ${String(value)}`);
+    else if (key === "mode") parts.push(String(value) === "week" ? "weekly" : "daily");
+    else if (key === "range_days") parts.push(`last ${String(value)} days`);
+    else parts.push(`${key}: ${String(value)}`);
+    if (parts.length >= 3) break;
+  }
+  return parts.join(" · ");
+}
+
+function describeRange(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  const range = value as { preset?: string; start_date?: string; end_date?: string };
+  if (range.preset) return String(range.preset).replace(/_/g, " ");
+  if (range.start_date && range.end_date) return `${range.start_date} to ${range.end_date}`;
+  return "";
+}
 
 function ToolRow({ call }: { call: ToolCallView }) {
   const [open, setOpen] = useState(false);
@@ -39,14 +89,10 @@ function ToolRow({ call }: { call: ToolCallView }) {
   const running = call.status === "running";
   const input = call.input && typeof call.input === "object" ? (call.input as Record<string, unknown>) : undefined;
   const sql = input && typeof input.sql === "string" ? input.sql : undefined;
-  const detail = input
-    ? Object.entries(input)
-        // An object argument reads as [object Object]; its own tool card shows it.
-        .filter(([key, value]) => key !== "sql" && value !== undefined && value !== "" && typeof value !== "object")
-        .slice(0, 3)
-        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
-        .join(" · ")
-    : "";
+  const detail = describeInput(input);
+  // What the tool was asked, falling back to what it returned. Never the model's
+  // own JSON on the collapsed row.
+  const headline = detail || call.summary;
 
   return (
     <li className="text-xs">
@@ -67,11 +113,10 @@ function ToolRow({ call }: { call: ToolCallView }) {
           <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
         )}
         <span className="shrink-0 font-medium text-neutral-700 dark:text-neutral-200">{TOOL_LABELS[call.name] ?? call.name}</span>
-        {call.summary && <span className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400">{call.summary}</span>}
         {call.durationMs > 0 && (
           <span className="shrink-0 text-[10px] tabular-nums text-neutral-400">{`${(call.durationMs / 1000).toFixed(1)}s`}</span>
         )}
-        {detail && !call.summary && <span className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400">{detail}</span>}
+        {headline && <span className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400">{headline}</span>}
         <ChevronRight className={cn("size-3.5 shrink-0 text-neutral-400 transition-transform", open && "rotate-90")} />
       </button>
       {open && (
