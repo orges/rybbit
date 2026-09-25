@@ -176,7 +176,16 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
   }, []);
 
   const load = useCallback((loaded: ChatMessage[], id: string) => {
-    setMessages(loaded);
+    // Threads stored before artifacts were de-duplicated can hold the same one
+    // several times; the reader should still see it once.
+    setMessages(
+      loaded.map(message => ({
+        ...message,
+        ...(message.artifacts
+          ? { artifacts: message.artifacts.filter((artifact, index, all) => all.findIndex(other => JSON.stringify(other) === JSON.stringify(artifact)) === index) }
+          : {}),
+      }))
+    );
     setConversationId(id);
     setStreaming(false);
   }, []);

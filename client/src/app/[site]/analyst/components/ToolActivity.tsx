@@ -30,6 +30,7 @@ const TOOL_LABELS: Record<string, string> = {
   run_sql: "Run a custom query",
   show_chart: "Draw a chart",
   show_table: "Show a table",
+  suggest_followups: "Suggest follow-ups",
 };
 
 function ToolRow({ call }: { call: ToolCallView }) {
@@ -40,7 +41,8 @@ function ToolRow({ call }: { call: ToolCallView }) {
   const sql = input && typeof input.sql === "string" ? input.sql : undefined;
   const detail = input
     ? Object.entries(input)
-        .filter(([key, value]) => key !== "sql" && value !== undefined && value !== "" && !(Array.isArray(value) && !value.length))
+        // An object argument reads as [object Object]; its own tool card shows it.
+        .filter(([key, value]) => key !== "sql" && value !== undefined && value !== "" && typeof value !== "object")
         .slice(0, 3)
         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
         .join(" · ")
