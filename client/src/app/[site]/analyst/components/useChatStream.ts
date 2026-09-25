@@ -111,7 +111,10 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
                     ? { ...call, ok: event.ok, summary: event.summary, durationMs: event.durationMs, status: event.ok ? "done" : "error", ...(event.artifact ? { artifact: event.artifact } : {}) }
                     : call
                 ),
-                ...(event.artifact ? { artifacts: [...(message.artifacts ?? []), event.artifact] } : {}),
+                // Models re-issue the same call; the reader should see it once.
+                ...(event.artifact && !message.artifacts?.some(artifact => JSON.stringify(artifact) === JSON.stringify(event.artifact))
+                  ? { artifacts: [...(message.artifacts ?? []), event.artifact] }
+                  : {}),
               }))
             );
             break;
