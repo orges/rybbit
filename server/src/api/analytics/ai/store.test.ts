@@ -57,3 +57,17 @@ describe("toClientMessage", () => {
     });
   });
 });
+
+describe("asUtcIso", () => {
+  it("marks a bare wall-clock timestamp as UTC", async () => {
+    const { asUtcIso } = await import("./store.js");
+    expect(asUtcIso("2026-09-25 19:35:23.832")).toBe("2026-09-25T19:35:23.832Z");
+  });
+
+  it("leaves a value that already carries an offset alone", async () => {
+    const { asUtcIso } = await import("./store.js");
+    expect(asUtcIso("2026-09-25T19:35:23.832Z")).toBe("2026-09-25T19:35:23.832Z");
+    expect(asUtcIso("2026-09-25T21:35:23.832+02:00")).toBe("2026-09-25T21:35:23.832+02:00");
+    expect(asUtcIso(undefined)).toBeUndefined();
+  });
+});

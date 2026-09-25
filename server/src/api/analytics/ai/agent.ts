@@ -181,7 +181,13 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         try {
           const output = await tool.run(args, toolContextWithStore);
           const stored = results.add(output.rows, tool.name, name === "run_sql" ? String(args.sql ?? "") : undefined);
-          record.output = stored ? JSON.stringify({ result_id: stored.id, ...safeParse(output.text) }) : output.text;
+          // The column names travel with every result. Without them the model
+          // guesses ("date" where the column is "time") and the presentation tool
+          // it calls next fails on a name it could have read.
+          const columns = stored ? Object.keys(stored.rows[0] ?? {}) : [];
+          record.output = stored
+            ? JSON.stringify({ result_id: stored.id, columns, ...safeParse(output.text) })
+            : output.text;
           if (output.artifact) {
             record.artifact = output.artifact;
             // Models repeat themselves; the same chart twice is a scroll of

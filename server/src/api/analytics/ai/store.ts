@@ -34,6 +34,18 @@ export interface UserParts {
   };
 }
 
+/**
+ * The AI tables are `timestamp` columns read back as bare wall-clock strings, so
+ * `2026-09-25 19:35:23.832` carries no offset. A client that parses that as
+ * local time is off by the viewer's offset — two hours in summer here, which
+ * made every thread read "2h ago" the moment it was written. Everything leaving
+ * this module is unambiguous UTC.
+ */
+function asUtcIso(value: string | null | undefined) {
+  if (!value) return undefined;
+  return /[Zz]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value.replace(" ", "T")}Z`;
+}
+
 const owned = (userId: string, organizationId: string, siteId: number, id: string) =>
   and(
     eq(aiConversations.id, id),
@@ -64,7 +76,8 @@ export async function listConversations(userId: string, organizationId: string, 
       )
     )
     .orderBy(desc(aiConversations.updatedAt))
-    .limit(50);
+    .limit(50)
+    .then(rows => rows.map(row => ({ ...row, updatedAt: asUtcIso(row.updatedAt) ?? row.updatedAt })));
 }
 
 export async function createConversation(input: {
@@ -152,14 +165,15 @@ export function toClientMessage(row: {
   createdAt?: string;
 }) {
   const parts = (row.parts ?? {}) as AssistantParts & { context?: unknown };
+  const createdAt = asUtcIso(row.createdAt);
   if (row.role === "user") {
-    return { id: row.id, role: row.role, content: row.content, ...(row.createdAt ? { createdAt: row.createdAt } : {}), context: parts.context };
+    return { id: row.id, role: row.role, content: row.content, ...(createdAt ? { createdAt } : {}), context: parts.context };
   }
   return {
     id: row.id,
     role: row.role,
     content: row.content,
-    ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+    ...(createdAt ? { createdAt } : {}),
     ...(parts.reasoning ? { reasoning: parts.reasoning } : {}),
     ...(parts.toolCalls?.length ? { toolCalls: parts.toolCalls } : {}),
     ...(parts.artifacts?.length ? { artifacts: parts.artifacts } : {}),
@@ -200,8 +214,11 @@ export async function listMemories(organizationId: string, siteId: number) {
     .from(aiMemories)
     .where(and(eq(aiMemories.organizationId, organizationId), eq(aiMemories.siteId, siteId)))
     .orderBy(desc(aiMemories.createdAt))
-    .limit(50);
+    .limit(50)
+    .then(rows => rows.map(row => ({ ...row, createdAt: asUtcIso(row.createdAt) ?? row.createdAt })));
 }
+
+export { asUtcIso };
 
 export async function addMemory(input: {
   organizationId: string;
