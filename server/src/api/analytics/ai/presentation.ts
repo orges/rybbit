@@ -107,6 +107,9 @@ export interface PresentationOutput extends ToolOutput {
 const MAX_SERIES = 12;
 const MAX_TABLE_ROWS = 100;
 
+/** A label that is a point in time, so the order on the axis is chronological. */
+const TIME_LABEL = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/;
+
 const chartArgs = z.object({
   result_id: z.string().min(1),
   title: z.string().min(1).max(120),
@@ -149,18 +152,26 @@ const showChart: AnalystTool = {
     }
     if (series && type === "donut") throw new Error("A donut has one value per slice; drop the series column");
 
-    const points = result.rows.map(row => ({
+    let points = result.rows.map(row => ({
       label: String(row[dimension] ?? "").slice(0, 120),
       value: Number(row[metric]),
       ...(series ? { series: String(row[series] ?? "").slice(0, 120) } : {}),
     }));
+    // A bar chart of a ranking has to be ordered by the value it plots. Rows
+    // come back in whatever order the query produced, and a "top 6 pages" chart
+    // drawn in query order reads left to right as ascending — so the tallest
+    // bar is in the middle and the chart contradicts the sentence above it.
+    // Time is the exception: a chronological axis is the point.
+    if (type === "bar" && !series && !points.some(point => TIME_LABEL.test(point.label))) {
+      points = [...points].sort((left, right) => right.value - left.value);
+    }
     if (type === "line" || type === "area") {
       // Categories have no place on a time axis, and plotting them anyway draws
       // the points against a synthetic 2000-01-01 domain that reads like a real
       // trend. A bar chart is the honest visual for a ranked list.
       const unparseable = points
         .map(point => point.label)
-        .filter(label => !/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/.test(label))
+        .filter(label => !TIME_LABEL.test(label))
         .slice(0, 3);
       if (unparseable.length) {
         throw new Error(

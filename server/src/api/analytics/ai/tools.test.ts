@@ -91,6 +91,42 @@ describe("show_chart", () => {
     });
   });
 
+  it("orders a bar chart by the value it plots, so the chart matches the ranking above it", async () => {
+    const { store, resultId } = storeWith([
+      { value: "/", pageviews: 17764 },
+      { value: "/search", pageviews: 23772 },
+      { value: "/categories", pageviews: 2616 },
+    ]);
+    const output = await run(
+      "show_chart",
+      { result_id: resultId, title: "Top pages", type: "bar", dimension: "value", metric: "pageviews" },
+      store
+    );
+    expect((output.artifact as { points: Array<{ label: string; value: number }> }).points.map(point => point.label)).toEqual([
+      "/search",
+      "/",
+      "/categories",
+    ]);
+  });
+
+  it("leaves a time axis in chronological order, whatever order the rows came back in", async () => {
+    const { store, resultId } = storeWith([
+      { day: "2026-09-21", sessions: 900 },
+      { day: "2026-09-19", sessions: 400 },
+      { day: "2026-09-20", sessions: 700 },
+    ]);
+    const output = await run(
+      "show_chart",
+      { result_id: resultId, title: "Sessions", type: "bar", dimension: "day", metric: "sessions" },
+      store
+    );
+    expect((output.artifact as { points: Array<{ label: string }> }).points.map(point => point.label)).toEqual([
+      "2026-09-21",
+      "2026-09-19",
+      "2026-09-20",
+    ]);
+  });
+
   it("refuses a column the result does not have, and lists the ones it does", async () => {
     const { store, resultId } = storeWith([{ value: "/", count: 10 }]);
     await expect(

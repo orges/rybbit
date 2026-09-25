@@ -177,11 +177,12 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   };
 
   return (
-    // Full-bleed. The 1400px cap left a wide monitor with a column of chat
-    // floating in the middle of it, which is the emptiest this page can look.
-    <div className="flex h-full min-h-0 w-full p-2 md:p-4">
+    // Full-bleed and flush to the right edge. The app sidebar is the only
+    // separation this page needs; padding inside it just left a strip of dead
+    // background down the side of a full-height panel.
+    <div className="flex h-full min-h-0 w-full">
       <section
-        className="relative flex min-h-0 w-full overflow-hidden rounded-lg border border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
+        className="relative flex min-h-0 w-full overflow-hidden border-y border-l border-neutral-150 bg-white dark:border-neutral-850 dark:bg-neutral-900"
         aria-label={t("Ask")}
       >
         <ConversationRail
