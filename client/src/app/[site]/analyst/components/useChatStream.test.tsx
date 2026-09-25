@@ -95,6 +95,25 @@ describe("useChatStream", () => {
     expect(result.current.messages).toHaveLength(2);
   });
 
+  it("drops prose from a step that also called a tool, since the model repeats it", async () => {
+    const preamble = "Traffic is down 63%. ";
+    emit([
+      { type: "text_delta", text: preamble },
+      { type: "tool_start", id: "t1", name: "get_overview", input: {} },
+      { type: "tool_end", id: "t1", name: "get_overview", ok: true, summary: "range: this week", durationMs: 40 },
+      { type: "text_discard", chars: preamble.length },
+      { type: "text_delta", text: "Sessions fell from 23,881 to 8,731." },
+      { type: "done", stopped: false, steps: 2 },
+    ]);
+
+    const { result } = renderStream();
+    await act(async () => {
+      await result.current.send("where did we lose visitors?");
+    });
+
+    expect(lastAssistant(result.current.messages)).toMatchObject({ content: "Sessions fell from 23,881 to 8,731." });
+  });
+
   it("replaces the previous answer on a retry instead of appending a second one", async () => {
     emit([
       { type: "text_delta", text: "first" },

@@ -27,6 +27,7 @@ const CONTEXT_BUDGET_CHARS = 120_000;
 export type AgentEvent =
   | { type: "reasoning_delta"; text: string }
   | { type: "text_delta"; text: string }
+  | { type: "text_discard"; chars: number }
   | { type: "tool_start"; id: string; name: string; input: unknown }
   | { type: "tool_end"; id: string; name: string; ok: boolean; summary: string; durationMs: number; artifact?: Artifact }
   | { type: "artifact"; artifact: Artifact }
@@ -138,6 +139,13 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         result.error = error instanceof Error ? error.message : "The provider stream failed";
         result.stopped = true;
       }
+    }
+    if (calls.length && stepText) {
+      // A model that writes the answer and calls a tool in the same step writes
+      // the answer again once the tool result is in. The step is not over until
+      // its text has streamed, so the reader is told to drop it.
+      result.text = result.text.slice(0, result.text.length - stepText.length);
+      emit({ type: "text_discard", chars: stepText.length });
     }
     if (stepUsage) {
       result.usage = addUsage(result.usage, stepUsage);

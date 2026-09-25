@@ -57,6 +57,7 @@ export type ChatStreamEvent =
   | { type: "conversation"; conversationId: string }
   | { type: "reasoning_delta"; text: string }
   | { type: "text_delta"; text: string }
+  | { type: "text_discard"; chars: number }
   | { type: "tool_start"; id: string; name: string; input: unknown }
   | { type: "tool_end"; id: string; name: string; ok: boolean; summary: string; durationMs: number; artifact?: AnalystArtifact }
   | { type: "artifact"; artifact: AnalystArtifact }

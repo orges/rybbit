@@ -91,6 +91,11 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
           case "text_delta":
             setMessages(current => patchMessage(current, assistantId, message => ({ ...message, content: message.content + event.text })));
             break;
+          case "text_discard":
+            setMessages(current =>
+              patchMessage(current, assistantId, message => ({ ...message, content: message.content.slice(0, -event.chars) }))
+            );
+            break;
           case "tool_start":
             setMessages(current =>
               patchMessage(current, assistantId, message => ({
