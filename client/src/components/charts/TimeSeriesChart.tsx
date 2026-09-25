@@ -86,6 +86,13 @@ type TimeSeriesChartProps<
   previousColor?: string;
   tooltipWidth?: number;
   yTickFormat?: (value: number) => string;
+  /**
+   * The granularity to tick at. Defaults to the dashboard's, which is what every
+   * dashboard view wants; a chart drawing data from somewhere else (an analyst
+   * artifact, an export) has to pass its own, or its axis is labelled in the
+   * viewer's units and the points sit in the wrong buckets.
+   */
+  bucket?: TimeBucket;
   /** Disable click-drag range zoom (e.g. for embedded dashboard cards). */
   disableDragZoom?: boolean;
   renderTooltip: (context: TimeSeriesTooltipContext<CurrentPoint, PreviousPoint>) => ReactNode;
@@ -208,12 +215,14 @@ export function TimeSeriesChart<
   previousColor,
   tooltipWidth = 220,
   yTickFormat = formatter,
+  bucket: bucketProp,
   disableDragZoom = false,
   renderTooltip,
   renderOverlay,
   onPlotClick,
 }: TimeSeriesChartProps<CurrentPoint, PreviousPoint>) {
-  const { time, bucket, setTime, setBucket } = useStore();
+  const { time, bucket: storeBucket, setTime, setBucket } = useStore();
+  const bucket = bucketProp ?? storeBucket;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const timezone = getTimezone();
@@ -235,10 +244,10 @@ export function TimeSeriesChart<
     const nextBucket =
       minutes <= 60 ? "minute" : minutes <= 3 * 24 * 60 && !bucketMinuteInterval(bucket) ? "hour" : null;
 
-    if (nextBucket && nextBucket !== bucket) {
+    if (nextBucket && nextBucket !== bucket && !bucketProp) {
       setBucket(nextBucket);
     }
-  }, [bucket, setBucket, time, timezone]);
+  }, [bucket, bucketProp, setBucket, time, timezone]);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ width: number; height: number }>({

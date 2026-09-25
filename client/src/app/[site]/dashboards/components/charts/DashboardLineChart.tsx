@@ -110,6 +110,7 @@ export function DashboardLineChart({ rows, mapping, area = false, standalone = f
           max={max}
           chartMin={chartMin}
           chartMax={chartMax}
+          bucket={bucket}
           disableDragZoom
           yTickFormat={formatter}
           renderTooltip={({ point, points }) => {
