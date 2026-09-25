@@ -36,6 +36,12 @@ describe("unsupportedFigures", () => {
     expect(unsupportedFigures("Between 2026-09-18 and 2026-09-25, at 14:30, nothing changed.", [overview])).toEqual([]);
   });
 
+  it("does not treat a year written in prose as a measurement", () => {
+    expect(unsupportedFigures("On September 25, 2026 there were 19,048 sessions.", [overview])).toEqual([]);
+    // Separated by a thousands mark it is a count, and is checked.
+    expect(unsupportedFigures("Sessions were 2,026 on September 25.", [overview])).toEqual(["2,026"]);
+  });
+
   it("reports each unsupported figure once, in the order it appears", () => {
     expect(unsupportedFigures("First 71,001 then 55,555 and 71,001 again.", [overview])).toEqual(["71,001", "55,555"]);
   });

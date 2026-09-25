@@ -18,6 +18,9 @@
 /** A number the answer presents as a measurement. */
 const MEASUREMENT = /(?<![0-9A-Za-z.])(\d{1,3}(?:,\d{3})+|\d{4,}|\d+\.\d+%?)(?=$|[^0-9A-Za-z%]|\.(?!\d))/g;
 
+/** A bare four-digit number that reads as a year rather than a count. */
+const YEAR = /^(19|20)\d{2}$/;
+
 const normalize = (value: string) => value.replace(/,/g, "").replace(/%$/, "");
 
 type Candidate = { raw: string; value: string; at: number };
@@ -32,6 +35,9 @@ function candidates(text: string): Candidate[] {
     // A number welded to a date or a clock time is not a measurement:
     // "2026-09-19", "19/09", "14:30".
     if ("-/:" .includes(before) || "-/:".includes(after)) continue;
+    // "September 25, 2026" is a date, not a figure, however the year is set
+    // apart from the day. A thousands-separated number is still a figure.
+    if (!raw.includes(",") && YEAR.test(raw)) continue;
     found.push({ raw, value: normalize(raw), at: index });
   }
   return found;
