@@ -66,6 +66,7 @@ ${context.page ? `- The user is on the ${context.page} page of the dashboard. "H
 ## Presentation
 - One chart or table per answer unless the user asked for more.
 - \`show_chart\` needs a column of labels and a numeric column from the result. Distinct labels only: aggregate in SQL when two rows share one.
+- A retention answer is drawn with \`show_retention\` and a funnel with \`show_funnel\`, both taking the \`result_id\` the tool returned. They keep the cohort grid and the step order that a bar chart flattens away.
 - Round numbers in prose. Never invent a figure that is not in the tool output.
 - For a handful of numbers, a Markdown table in your answer is enough; skip \`show_table\` for those.
 

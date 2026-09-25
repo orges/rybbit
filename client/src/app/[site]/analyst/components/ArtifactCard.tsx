@@ -5,6 +5,8 @@ import type { AnalystArtifact } from "@/api/analyst/endpoints/analyst";
 import { DashboardBarChart } from "@/app/[site]/dashboards/components/charts/DashboardBarChart";
 import { DashboardLineChart } from "@/app/[site]/dashboards/components/charts/DashboardLineChart";
 import { DashboardPie } from "@/app/[site]/dashboards/components/charts/DashboardPie";
+import { Funnel as FunnelSteps } from "@/app/[site]/funnels/components/Funnel";
+import { RetentionChart } from "@/app/[site]/retention/RetentionChart";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SESSION_COLUMN, type ResultLink } from "./links";
 
@@ -126,6 +128,40 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
   );
 }
 
+/**
+ * The product's own retention and funnel visuals, not second implementations:
+ * the same chart and the same funnel the Retention and Funnels pages draw, so a
+ * chat answer reads like the page it links to.
+ */
+function Retention({ artifact }: { artifact: Extract<AnalystArtifact, { type: "retention" }> }) {
+  return (
+    <RetentionChart
+      isLoading={false}
+      mode={artifact.mode}
+      data={{
+        cohorts: artifact.cohorts,
+        maxPeriods: artifact.maxPeriods,
+        mode: artifact.mode,
+        range: 0,
+      }}
+    />
+  );
+}
+
+function Funnel({ artifact }: { artifact: Extract<AnalystArtifact, { type: "funnel" }> }) {
+  return (
+    <FunnelSteps
+      data={artifact.results}
+      steps={artifact.steps}
+      isError={false}
+      error={null}
+      isPending={false}
+      {...(artifact.range ? { time: { mode: "range" as const, startDate: artifact.range.startDate, endDate: artifact.range.endDate } } : {})}
+      {...(artifact.filters ? { filters: artifact.filters } : {})}
+    />
+  );
+}
+
 function Followups({ artifact, onPick }: { artifact: Extract<AnalystArtifact, { type: "followups" }>; onPick: (value: string) => void }) {
   return (
     <div className="space-y-1.5">
@@ -189,6 +225,10 @@ export function ArtifactCard({
         <Chart artifact={artifact} />
       ) : artifact.type === "table" ? (
         <ArtifactTable artifact={artifact} siteId={siteId} />
+      ) : artifact.type === "retention" ? (
+        <Retention artifact={artifact} />
+      ) : artifact.type === "funnel" ? (
+        <Funnel artifact={artifact} />
       ) : null}
     </figure>
   );

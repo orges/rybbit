@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolRow } from "./tools.js";
+import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolRange, type ToolRow } from "./tools.js";
 
 /**
  * Presentation tools: how the answer is drawn, not what it says.
@@ -18,15 +18,28 @@ export interface StoredResult {
   /** The analytics tool that produced the rows, not the one drawing them. */
   source: string;
   sql?: string;
+  /** The arguments the tool ran with — a funnel's steps, a retention's mode. */
+  input?: unknown;
+  /** The range the rows were actually computed over, when it is a fixed one. */
+  range?: { startDate: string; endDate: string };
 }
 
 export class ResultStore {
   private readonly results = new Map<string, StoredResult>();
 
-  add(rows: ToolRow[] | undefined, source: string, sql?: string): StoredResult | undefined {
+  add(rows: ToolRow[] | undefined, source: string, options?: { sql?: string; input?: unknown; range?: ToolRange }): StoredResult | undefined {
     if (!rows?.length) return undefined;
     const id = `r${this.results.size + 1}`;
-    const result: StoredResult = { id, rows, rowCount: rows.length, source, ...(sql ? { sql } : {}) };
+    const range = options?.range;
+    const result: StoredResult = {
+      id,
+      rows,
+      rowCount: rows.length,
+      source,
+      ...(options?.sql ? { sql: options.sql } : {}),
+      ...(options?.input !== undefined ? { input: options.input } : {}),
+      ...(range?.startDate && range?.endDate ? { range: { startDate: range.startDate, endDate: range.endDate } } : {}),
+    };
     this.results.set(id, result);
     return result;
   }
@@ -51,6 +64,27 @@ export type Artifact =
       source?: string;
     }
   | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean; source?: string }
+  | {
+      type: "retention";
+      title: string;
+      mode: "day" | "week";
+      /** Cohort start date → the share of that cohort returning in each later period. */
+      cohorts: Record<string, { size: number; percentages: (number | null)[] }>;
+      maxPeriods: number;
+      source?: string;
+    }
+  | {
+      type: "funnel";
+      title: string;
+      /** The steps as they were asked for, so the funnel can label and expand them. */
+      steps: Array<{ type: "page" | "event"; value: string }>;
+      results: Array<{ step_number: number; step_name: string; sessions: number; conversion_rate: number; dropoff_rate: number }>;
+      /** The range the steps were counted over, so a drill-down asks for the same one. */
+      range?: { startDate: string; endDate: string };
+      /** The filters in effect then, for the same reason. */
+      filters?: unknown[];
+      source?: string;
+    }
   | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 
@@ -217,6 +251,135 @@ const formatCell = (value: unknown) => {
   return String(value).slice(0, 300);
 };
 
+/** A chart, a table and a grid are three shapes of the same rows. */
+const noSuchResult = (id: string) =>
+  new Error(`No result ${id}. Use one of the result ids from the tools you already called.`);
+const noSuchColumns = (id: string, missing: string[], available: string[]) =>
+  new Error(`Result ${id} is missing ${missing.join(" and ")}. Available columns: ${available.join(", ")}`);
+
+const resultOf = (id: string, ctx: { results: ResultStore }) => {
+  const result = ctx.results.get(id);
+  if (!result) throw noSuchResult(id);
+  return result;
+};
+
+const MAX_COHORTS = 12;
+const MAX_PERIODS = 8;
+
+const showRetention: AnalystTool = {
+  name: "show_retention",
+  description:
+    "Draw the cohorts of a get_retention result: one line per cohort, the share of it still returning in each later period. Use this for a retention answer instead of show_chart or show_table — retention is a cohort over time, not a ranking, and the columns do not chart as a ranking.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string", description: "The result_id get_retention returned" },
+      title: { type: "string" },
+    },
+    required: ["result_id", "title"],
+  },
+  async run(args, ctx) {
+    const parsed = z.object({ result_id: z.string().min(1), title: z.string().min(1).max(120) }).safeParse(args);
+    if (!parsed.success) throw new Error("show_retention needs a result_id and a title");
+    const result = resultOf(parsed.data.result_id, ctx);
+    const available = Object.keys(result.rows[0] ?? {});
+    const missing = ["cohort_period", "period_difference", "retention_percentage"].filter(column => !available.includes(column));
+    if (missing.length) throw noSuchColumns(result.id, missing, available);
+
+    // A grid, read back into the shape the retention page's own chart expects.
+    const cells: Record<string, { size: number; percentages: (number | null)[] }> = {};
+    let maxPeriods = 0;
+    for (const row of result.rows) {
+      const cohort = String(row.cohort_period ?? "");
+      const period = Number(row.period_difference);
+      const retained = Number(row.retention_percentage);
+      if (!cohort || !Number.isFinite(period) || period < 0) continue;
+      const entry = (cells[cohort] ??= { size: Number(row.cohort_size) || 0, percentages: [] });
+      entry.percentages[period] = Number.isFinite(retained) ? Math.round(retained * 100) / 100 : null;
+      maxPeriods = Math.max(maxPeriods, period + 1);
+    }
+    const newestFirst = Object.keys(cells).sort((a, b) => b.localeCompare(a)).slice(0, MAX_COHORTS);
+    if (!newestFirst.length) throw new Error(`Result ${result.id} has no cohort rows. Call get_retention first.`);
+
+    const cohorts = Object.fromEntries(
+      newestFirst.map(cohort => [
+        cohort,
+        {
+          size: cells[cohort].size,
+          percentages: Array.from({ length: Math.min(maxPeriods, MAX_PERIODS) }, (_, period) => cells[cohort].percentages[period] ?? null),
+        },
+      ])
+    );
+    const mode = (result.input as { mode?: string } | undefined)?.mode === "week" ? "week" : "day";
+    const artifact: Artifact = {
+      type: "retention",
+      title: parsed.data.title,
+      mode,
+      cohorts,
+      maxPeriods: Math.min(maxPeriods, MAX_PERIODS),
+      source: result.source,
+    };
+    return {
+      text: `Retention "${parsed.data.title}" shown: ${newestFirst.length} cohorts over up to ${artifact.maxPeriods} periods from ${result.source}.`,
+      artifact,
+    };
+  },
+};
+
+const showFunnel: AnalystTool = {
+  name: "show_funnel",
+  description:
+    "Draw a get_funnel result as a funnel: one bar per step in order, with the sessions that reached it, the conversion from the previous step and the drop-off. Use this instead of charting step_name against sessions, which loses the order and both rates.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string", description: "The result_id get_funnel returned" },
+      title: { type: "string" },
+    },
+    required: ["result_id", "title"],
+  },
+  async run(args, ctx) {
+    const parsed = z.object({ result_id: z.string().min(1), title: z.string().min(1).max(120) }).safeParse(args);
+    if (!parsed.success) throw new Error("show_funnel needs a result_id and a title");
+    const result = resultOf(parsed.data.result_id, ctx);
+    const available = Object.keys(result.rows[0] ?? {});
+    const required = ["step_number", "step_name", "sessions", "conversion_rate", "dropoff_rate"];
+    const missing = required.filter(column => !available.includes(column));
+    if (missing.length) throw noSuchColumns(result.id, missing, available);
+
+    // The step definitions came from the tool's own arguments, not the rows.
+    const steps = z
+      .array(z.object({ type: z.enum(["page", "event"]), value: z.string().min(1).max(500) }))
+      .min(2)
+      .safeParse((result.input as { steps?: unknown } | undefined)?.steps);
+    if (!steps.success) throw new Error(`Result ${result.id} did not come from get_funnel. Call get_funnel with the steps you want first.`);
+
+    const filters = (ctx.filters ?? []) as unknown[];
+    const results = [...result.rows]
+      .map(row => ({
+        step_number: Number(row.step_number),
+        step_name: String(row.step_name ?? ""),
+        sessions: Number(row.sessions) || 0,
+        conversion_rate: Number(row.conversion_rate) || 0,
+        dropoff_rate: Number(row.dropoff_rate) || 0,
+      }))
+      .sort((left, right) => left.step_number - right.step_number);
+    const artifact: Artifact = {
+      type: "funnel",
+      title: parsed.data.title,
+      steps: steps.data,
+      results,
+      ...(result.range ? { range: result.range } : {}),
+      ...(filters.length ? { filters } : {}),
+      source: result.source,
+    };
+    return {
+      text: `Funnel "${parsed.data.title}" shown: ${results.length} steps from ${result.source}.`,
+      artifact,
+    };
+  },
+};
+
 const suggestFollowups: AnalystTool = {
   name: "suggest_followups",
   description:
@@ -241,7 +404,7 @@ const suggestFollowups: AnalystTool = {
   },
 };
 
-export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable, suggestFollowups];
+export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable, showRetention, showFunnel, suggestFollowups];
 
 /** Every tool the agent can actually run, keyed by the name the model calls. */
 export const ALL_TOOLS = new Map([...ANALYST_TOOLS, ...PRESENTATION_TOOLS].map(tool => [tool.name, tool]));

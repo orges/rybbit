@@ -186,7 +186,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       } else {
         try {
           const output = await tool.run(args, toolContextWithStore);
-          const stored = results.add(output.rows, tool.name, name === "run_sql" ? String(args.sql ?? "") : undefined);
+          const stored = results.add(output.rows, tool.name, {
+            ...(name === "run_sql" ? { sql: String(args.sql ?? "") } : {}),
+            input: args,
+            ...(output.range ? { range: output.range } : {}),
+          });
           // The column names travel with every result. Without them the model
           // guesses ("date" where the column is "time") and the presentation tool
           // it calls next fails on a name it could have read.

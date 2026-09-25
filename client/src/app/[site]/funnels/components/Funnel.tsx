@@ -11,6 +11,8 @@ import { targetTypeToEventType } from "../../../../lib/events";
 import { SessionsList } from "../../../../components/Sessions/SessionsList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { useStore } from "../../../../lib/store";
+import type { Filter } from "@rybbit/shared";
+import type { Time } from "../../../../components/DateSelector/types";
 
 export type FunnelChartData = {
   stepName: string;
@@ -26,6 +28,10 @@ interface FunnelProps {
   error: unknown;
   isPending: boolean;
   steps: FunnelStep[];
+  /** The range the steps were counted over. The dashboard's own when absent. */
+  time?: Time;
+  /** The filters in effect when they were counted, for a chat-drawn funnel. */
+  filters?: Filter[];
 }
 
 const LIMIT = 25;
@@ -37,9 +43,11 @@ interface FunnelStepComponentProps {
   chartData: FunnelChartData[];
   firstStep: FunnelChartData | undefined;
   siteId: number;
+  time: Time;
+  filters?: Filter[];
 }
 
-function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId }: FunnelStepComponentProps) {
+function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId, time, filters }: FunnelStepComponentProps) {
   const t = useExtracted();
 
   const stepTypeLabels: Record<FunnelStepType, string> = {
@@ -55,7 +63,6 @@ function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId 
   const [currentTab, setCurrentTab] = useState<"reached" | "dropped">("reached");
   const [reachedPage, setReachedPage] = useState(1);
   const [droppedPage, setDroppedPage] = useState(1);
-  const { time } = useStore();
 
   const maxBarWidth = 100;
   const ratio = firstStep?.sessions ? step.sessions / firstStep.sessions : 0;
@@ -76,6 +83,7 @@ function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId 
     page: reachedPage,
     limit: LIMIT + 1,
     enabled: isExpanded && currentTab === "reached",
+    filters,
   });
 
   // Fetch sessions for "dropped" mode (only if not first step)
@@ -89,6 +97,7 @@ function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId 
     page: droppedPage,
     limit: LIMIT + 1,
     enabled: isExpanded && currentTab === "dropped" && !isFirstStep,
+    filters,
   });
 
   const allReachedSessions = reachedData || [];
@@ -213,9 +222,13 @@ function FunnelStepComponent({ step, index, steps, chartData, firstStep, siteId 
   );
 }
 
-export function Funnel({ data, steps, isError, error, isPending }: FunnelProps) {
+export function Funnel({ data, steps, isError, error, isPending, time, filters }: FunnelProps) {
   const t = useExtracted();
   const { site } = useStore();
+  const dashboardTime = useStore(state => state.time);
+  // A funnel drawn inside a chat answer was counted over the question's range,
+  // not whatever the dashboard happens to be looking at now.
+  const stepTime = time ?? dashboardTime;
 
   // Prepare chart data
   const chartData =
@@ -251,6 +264,8 @@ export function Funnel({ data, steps, isError, error, isPending }: FunnelProps) 
               chartData={chartData}
               firstStep={firstStep}
               siteId={Number(site)}
+              time={stepTime}
+              filters={filters}
             />
           ))}
         </div>

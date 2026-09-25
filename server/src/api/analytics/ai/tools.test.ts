@@ -182,6 +182,74 @@ describe("show_table", () => {
   });
 });
 
+describe("show_retention", () => {
+  const retentionRows = [
+    { cohort_period: "2026-09-24", period_difference: 0, cohort_size: 100, retention_percentage: 100 },
+    { cohort_period: "2026-09-24", period_difference: 1, cohort_size: 100, retention_percentage: 40.128 },
+    { cohort_period: "2026-09-24", period_difference: 3, cohort_size: 100, retention_percentage: 12 },
+    { cohort_period: "2026-09-22", period_difference: 0, cohort_size: 80, retention_percentage: 100 },
+  ];
+
+  it("reads the cohort rows back into a grid, newest cohort first, gaps left empty", async () => {
+    const store = new ResultStore();
+    const stored = store.add(retentionRows, "get_retention", { input: { mode: "day" } });
+    const output = await run("show_retention", { result_id: stored!.id, title: "Day retention" }, store);
+
+    expect(output.artifact).toMatchObject({
+      type: "retention",
+      title: "Day retention",
+      mode: "day",
+      maxPeriods: 4,
+      cohorts: {
+        "2026-09-24": { size: 100, percentages: [100, 40.13, null, 12] },
+        "2026-09-22": { size: 80, percentages: [100, null, null, null] },
+      },
+      source: "get_retention",
+    });
+  });
+
+  it("carries the weekly mode through, and says so when the result is not a cohort grid", async () => {
+    const store = new ResultStore();
+    const weekly = store.add(retentionRows, "get_retention", { input: { mode: "week" } });
+    expect((await run("show_retention", { result_id: weekly!.id, title: "x" }, store)).artifact).toMatchObject({ mode: "week" });
+
+    const breakdown = store.add([{ value: "/", count: 3 }], "get_breakdown");
+    await expect(run("show_retention", { result_id: breakdown!.id, title: "x" }, store)).rejects.toThrow("is missing cohort_period");
+  });
+});
+
+describe("show_funnel", () => {
+  const funnelRows = [
+    { step_number: 2, step_name: "/pricing", sessions: 40, conversion_rate: 40, dropoff_rate: 60 },
+    { step_number: 1, step_name: "/", sessions: 100, conversion_rate: 100, dropoff_rate: 0 },
+  ];
+
+  it("keeps the steps in order with the definitions they were asked for", async () => {
+    const store = new ResultStore();
+    const stored = store.add(funnelRows, "get_funnel", {
+      input: { steps: [{ type: "page", value: "/" }, { type: "event", value: "demo_request" }] },
+      range: { startDate: "2026-09-19", endDate: "2026-09-25" },
+    });
+    const output = await run("show_funnel", { result_id: stored!.id, title: "Signup funnel" }, store);
+
+    expect(output.artifact).toMatchObject({
+      type: "funnel",
+      steps: [{ type: "page", value: "/" }, { type: "event", value: "demo_request" }],
+      results: [
+        { step_number: 1, step_name: "/", sessions: 100, conversion_rate: 100, dropoff_rate: 0 },
+        { step_number: 2, step_name: "/pricing", sessions: 40, conversion_rate: 40, dropoff_rate: 60 },
+      ],
+      range: { startDate: "2026-09-19", endDate: "2026-09-25" },
+    });
+  });
+
+  it("refuses a result that did not come from get_funnel", async () => {
+    const store = new ResultStore();
+    const stored = store.add(funnelRows, "get_breakdown");
+    await expect(run("show_funnel", { result_id: stored!.id, title: "x" }, store)).rejects.toThrow("did not come from get_funnel");
+  });
+});
+
 describe("untrusted values from ClickHouse", () => {
   it("strips the NUL padding a FixedString column arrives with", async () => {
     const { sanitizeUntrustedValue } = await import("../../../mcp/tools/shared.js");

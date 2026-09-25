@@ -14,6 +14,23 @@ export type AnalystArtifact =
       source?: string;
     }
   | { type: "table"; title: string; columns: string[]; rows: string[][]; total: number; truncated: boolean; source?: string }
+  | {
+      type: "retention";
+      title: string;
+      mode: "day" | "week";
+      cohorts: Record<string, { size: number; percentages: (number | null)[] }>;
+      maxPeriods: number;
+      source?: string;
+    }
+  | {
+      type: "funnel";
+      title: string;
+      steps: Array<{ type: "page" | "event"; value: string }>;
+      results: Array<{ step_number: number; step_name: string; sessions: number; conversion_rate: number; dropoff_rate: number }>;
+      range?: { startDate: string; endDate: string };
+      filters?: Filter[];
+      source?: string;
+    }
   | { type: "followups"; title: string; options: string[] }
   | { type: "sql"; title: string; sql: string; rowCount: number };
 

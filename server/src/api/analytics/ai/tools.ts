@@ -51,6 +51,9 @@ export interface ToolContext {
   signal: AbortSignal;
 }
 
+/** The window a tool actually queried, for a result that can be re-queried later. */
+export type ToolRange = { startDate?: string; endDate?: string };
+
 export interface ToolOutput {
   /** What the model reads. Kept small: full rows live in the result store. */
   text: string;
@@ -58,6 +61,8 @@ export interface ToolOutput {
   /** Overrides the default columns/limit when previewing rows for the model. */
   preview?: { columns?: string[]; limit?: number };
   artifact?: Artifact;
+  /** Set when the rows are over a fixed window, so an artifact can ask for the same one. */
+  range?: ToolRange;
 }
 
 export interface AnalystTool {
@@ -452,6 +457,9 @@ const getRetention: AnalystTool = {
       .map(([cohort, { size, percentages }]) => ({ cohort, size, retained_percent: percentages.slice(0, 8).map(value => (value === null ? null : formatNumber(value))) }));
     return {
       text: JSON.stringify({ mode, range_days: range, cohorts: cohorts.slice(0, 6), total_cohorts: Object.keys(processed.cohorts).length }),
+      // Retention is a grid; without the rows there is nothing for show_retention
+      // to draw and the answer can only be prose.
+      rows: rows as ToolRow[],
     };
   },
 };
@@ -489,7 +497,12 @@ const getFunnel: AnalystTool = {
       query: buildFunnelQuery(baseParams(ctx, range), ctx.siteId, steps.data),
       params: { siteId: ctx.siteId, stepNumber: steps.data.length },
     });
-    return { text: JSON.stringify({ range: range.label, steps: steps.data, results: rows }), rows, preview: { limit: 20 } };
+    return {
+      text: JSON.stringify({ range: range.label, steps: steps.data, results: rows }),
+      rows,
+      preview: { limit: 20 },
+      range: { startDate: range.startDate, endDate: range.endDate },
+    };
   },
 };
 
