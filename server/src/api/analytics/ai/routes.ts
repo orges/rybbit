@@ -54,7 +54,7 @@ const chatBodySchema = z.object({
  */
 const suggestBody = z.object({
   siteId: z.number().int().positive(),
-  kind: z.enum(["goal", "funnel"]),
+  kind: z.enum(["goal", "funnel", "dashboard"]),
   ask: z.string().trim().max(300).optional(),
   context: z
     .object({
