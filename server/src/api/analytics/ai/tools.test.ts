@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./tools.js", () => ({ ANALYST_TOOLS: [] }));
 
 import { bucketsIn, defaultBucket, previousRange, resolvePreset, resolveToolRange } from "./time.js";
+import { buildSystemPrompt } from "./prompt.js";
 import { ALL_TOOLS, ResultStore } from "./presentation.js";
 import { PROPOSAL_TOOLS } from "./proposal.js";
 import type { ToolContext, ToolRow } from "./tools.js";
@@ -408,5 +409,39 @@ describe("how many points a chart may carry", () => {
     // An unbounded range resolves to no points rather than Infinity, so the cap
     // check cannot be skipped by asking for a range with no dates in it.
     expect(bucketsIn({ label: "all time" }, "hour")).toBe(0);
+  });
+});
+
+
+describe("the rendered system prompt", () => {
+  const context = {
+    siteId: 1,
+    siteName: "Example",
+    timezone: "UTC",
+    rangeLabel: "today",
+    startDate: "2026-09-26",
+    endDate: "2026-09-26",
+    filters: [],
+    today: "2026-09-26",
+  };
+
+  it("names its tools with the backticks the model reads them by", () => {
+    const prompt = buildSystemPrompt(context);
+    // A stray escape can eat the backticks and leave a tool name the model will
+    // not recognise, and that still compiles. Only the rendered text shows it.
+    for (const tool of ["get_goals", "get_session_timeline", "analyse_sessions", "suggest_followups", "show_chart", "run_sql"]) {
+      expect(prompt, `${tool} should appear in the prompt as \`${tool}\``).toContain(`\`${tool}\``);
+    }
+  });
+
+  it("has no mangled tool name, whatever went wrong in editing", () => {
+    const prompt = buildSystemPrompt(context);
+    expect(prompt).not.toMatch(/\\[a-z_]+/);
+    expect(prompt).not.toContain("undefined");
+  });
+
+  it("numbers its rules in order, so an inserted rule cannot desynchronise them", () => {
+    const numbers = [...buildSystemPrompt(context).matchAll(/^(\d+)\. /gm)].map(match => Number(match[1]));
+    expect(numbers).toEqual(numbers.map((_, index) => index + 1));
   });
 });

@@ -451,7 +451,7 @@ const showFunnel: AnalystTool = {
 const suggestFollowups: AnalystTool = {
   name: "suggest_followups",
   description:
-    "Offer up to four short questions the user is likely to ask next, drawn from what the data actually showed. Use it once, at the end of a complete answer, when there is an obvious next step — a drill-down, a comparison, or a different dimension.",
+    "End an analysis by offering the questions that follow from it. Call this as the final tool of any answer that found something, with 2 to 4 questions drawn from what the data actually showed — a page that stands out, a period to compare against, the same question on another dimension. Every question must be one you could answer with a tool. Skip it only when the answer was a single figure or the data was empty.",
   parameters: {
     type: "object",
     properties: {
