@@ -75,6 +75,8 @@ export interface SessionDigest {
    * numbers are wrong, not that a list is short.
    */
   eventsTruncated?: boolean;
+  /** The journey held more pageviews than the digest keeps. */
+  stepsTruncated?: boolean;
   /** Events that existed, which may be more than were read. */
   eventCount?: number;
   durationSeconds: number;
@@ -118,6 +120,17 @@ const DEAD_CLICK_WINDOW_MS = 2_000;
  * rather than a quiet lie about what was read.
  */
 const MAX_ITEMS = 20;
+
+/**
+ * Steps kept, and from both ends.
+ *
+ * Steps are the one list that is not naturally bounded: a session that browses for
+ * two hours has thousands of pageviews, and a two-thousand-entry journey tells a
+ * reader nothing. The first and last are kept because they are the informative
+ * ends — where it started and where it ended up — and the middle is where a
+ * summary belongs.
+ */
+const MAX_STEPS = 40;
 
 /** A label long enough to identify a control, short enough not to smuggle a page. */
 const MAX_LABEL = 80;
@@ -176,7 +189,7 @@ export function digestSession(rows: TimelineRow[], opts: { endTimestamp?: number
 
   // --- steps, with dwell from the gap to the next pageview ---
   const pageviews = ordered.filter(row => row.type === "pageview");
-  const steps: DigestStep[] = pageviews.map((row, index) => {
+  const allSteps: DigestStep[] = pageviews.map((row, index) => {
     const next = pageviews[index + 1];
     return {
       path: path(row),
@@ -184,6 +197,10 @@ export function digestSession(rows: TimelineRow[], opts: { endTimestamp?: number
       dwell: Math.max(0, Math.round(((next?.timestamp ?? end) - row.timestamp) / 1000)),
     };
   });
+  const stepsTruncated = allSteps.length > MAX_STEPS;
+  const steps: DigestStep[] = stepsTruncated
+    ? [...allSteps.slice(0, MAX_STEPS / 2), ...allSteps.slice(-MAX_STEPS / 2)]
+    : allSteps;
 
   // --- clicks, grouped by label on a page ---
   const clickRows = ordered.filter(row => row.type === "button_click");
@@ -271,10 +288,12 @@ export function digestSession(rows: TimelineRow[], opts: { endTimestamp?: number
   ];
 
   return {
-    truncated: clicks.length > MAX_ITEMS || fieldGroups.size > MAX_ITEMS || formGroups.size > MAX_ITEMS,
+    truncated:
+      stepsTruncated || clicks.length > MAX_ITEMS || fieldGroups.size > MAX_ITEMS || formGroups.size > MAX_ITEMS,
+    ...(stepsTruncated ? { stepsTruncated: true } : {}),
     durationSeconds: Math.max(0, Math.round((end - first) / 1000)),
-    entryPage: steps[0]?.path ?? "",
-    exitPage: steps[steps.length - 1]?.path ?? "",
+    entryPage: allSteps[0]?.path ?? "",
+    exitPage: allSteps[allSteps.length - 1]?.path ?? "",
     steps,
     clicks: clicks.slice(0, MAX_ITEMS),
     deadClicks: deadClicks.slice(0, MAX_ITEMS),
@@ -318,6 +337,7 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     custom_events: digest.customEvents.map(event => `${event.name} ×${event.count}`),
     outbound: digest.outbound,
     truncated: digest.truncated,
+    ...(digest.stepsTruncated ? { journey_note: "Long journey: the first and last pages are shown, not every page." } : {}),
     ...(digest.eventsTruncated
       ? {
           events_truncated: true,
