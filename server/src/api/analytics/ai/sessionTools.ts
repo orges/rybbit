@@ -34,8 +34,21 @@ const timeShape = {
  * never submitted the form, but not what was in it.
  */
 
-/** The most rows read for one session. A busy one is a few hundred. */
+/**
+ * Row caps, and they differ by tool on purpose.
+ *
+ * Reading one session is about telling that story, so it gets a generous cap: a
+ * heavy session runs to tens of thousands of events, and a floor of 958 against a
+ * real 13,311 is not a summary of anything.
+ *
+ * Comparing sessions is about what recurs, and a pattern does not need every
+ * event — a cap of a few thousand per session finds the same repeated dead clicks
+ * and unsubmitted fields, and keeps twenty sessions inside a second. When a cap
+ * bites, the digest says the counts are a floor, so a number from a comparison is
+ * never quoted as exact either.
+ */
 const MAX_TIMELINE_ROWS = 2_000;
+const MAX_TIMELINE_ROWS_SINGLE = 20_000;
 /** Sessions one comparison may digest. */
 const MAX_SESSIONS = 20;
 
@@ -108,7 +121,7 @@ export function windowFor(args: Record<string, unknown>, ctx: ToolContext) {
   return ctx.defaultRange.startDate ? ctx.defaultRange : resolvePreset("last_90_days", ctx.timezone);
 }
 
-async function digestOne(ctx: ToolContext, sessionId: string, args: Record<string, unknown>): Promise<SessionDigest> {
+async function digestOne(ctx: ToolContext, sessionId: string, args: Record<string, unknown>, maxRows = MAX_TIMELINE_ROWS): Promise<SessionDigest> {
   const range = windowFor(args, ctx);
   // One row over the cap, so a session with more events than we read is *known*
   // to have had them. Reading exactly the cap and stopping cannot tell the
@@ -116,10 +129,10 @@ async function digestOne(ctx: ToolContext, sessionId: string, args: Record<strin
   // that quietly undercounts clicks is worse than one that admits it is partial.
   const rows = await runAnalyticsQuery<Record<string, unknown>>({
     query: buildSessionTimelineQuery(timeStatementFor(range, ctx.timezone)),
-    params: { siteId: ctx.siteId, sessionId, limit: MAX_TIMELINE_ROWS + 1 },
+    params: { siteId: ctx.siteId, sessionId, limit: maxRows + 1 },
   });
-  const eventsTruncated = rows.length > MAX_TIMELINE_ROWS;
-  const digest = digestSession((eventsTruncated ? rows.slice(0, MAX_TIMELINE_ROWS) : rows).map(toTimelineRow));
+  const eventsTruncated = rows.length > maxRows;
+  const digest = digestSession((eventsTruncated ? rows.slice(0, maxRows) : rows).map(toTimelineRow));
   return eventsTruncated ? { ...digest, eventsTruncated: true, eventCount: rows.length } : digest;
 }
 
@@ -157,7 +170,7 @@ const getSessionTimeline: AnalystTool = {
     const sessionId = sessionIdSchema.safeParse(String(args.session_id ?? "").trim());
     if (!sessionId.success) throw new Error("session_id is required");
 
-    const digest = await digestOne(ctx, sessionId.data, args);
+    const digest = await digestOne(ctx, sessionId.data, args, MAX_TIMELINE_ROWS_SINGLE);
     if (!digest.steps.length && !digest.clicks.length) {
       return {
         text: JSON.stringify({
