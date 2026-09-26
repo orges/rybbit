@@ -25,10 +25,10 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
    * enough: a list of names and a model asked not to repeat them produces the same
    * /search goal under a fresh title, which is worse than no check at all.
    */
-  const existing = (data?.data ?? []).map(goal => {
-    const condition = goal.config?.pathPattern || goal.config?.eventName || goal.config?.valuePattern || goal.goalType;
-    return goal.name ? `${goal.name} — ${condition}` : condition;
-  });
+  const existing = (data?.data ?? []).map(goal => ({
+    ...(goal.name ? { name: goal.name } : {}),
+    condition: goal.config?.pathPattern || goal.config?.eventName || goal.config?.valuePattern || goal.goalType,
+  }));
 
   return (
     <>

@@ -78,10 +78,14 @@ const suggestBody = z.object({
       timeZone: z.string().max(80).default("UTC"),
       filters: z.array(filterSchema).max(20).default([]),
       /**
-       * What the page already lists. A duplicate reads as a useless suggestion,
-       * and the page already has the list, so it is sent rather than queried.
+       * What the page already tracks, as name and condition. A duplicate is the
+       * same condition under a different name, so the condition is what gets
+       * checked; the name is for the prompt.
        */
-      existing: z.array(z.string().max(120)).max(50).default([]),
+      existing: z
+        .array(z.object({ name: z.string().max(120).optional(), condition: z.string().max(200) }))
+        .max(50)
+        .default([]),
     })
     .default({ timeZone: "UTC", filters: [], existing: [] }),
 });
@@ -160,6 +164,7 @@ export async function analystSuggest(
         timezone,
         defaultRange: window,
         filters: context.filters,
+        existingConditions: context.existing.map(entry => entry.condition),
         signal: abort.signal,
       },
       tools: PROPOSAL_TOOLS,

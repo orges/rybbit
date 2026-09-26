@@ -46,8 +46,8 @@ export function CopilotPanel<T extends AnyProposal>({
   loadingLabel: string;
   /** The button that hands the proposal to a form. */
   actionLabel: string;
-  /** What the page already lists, so a duplicate is never proposed. */
-  existing?: string[];
+  /** What the page already tracks, as name and condition. */
+  existing?: Array<{ name?: string; condition: string }>;
   render: (proposal: T) => ReactNode;
   onOpen: (proposal: T) => void;
 }) {

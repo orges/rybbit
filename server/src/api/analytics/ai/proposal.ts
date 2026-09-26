@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DASHBOARD_EXAMPLES } from "@rybbit/shared";
 import { goalBodySchema } from "../goals/goalSchema.js";
-import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolProposal } from "./tools.js";
+import { ANALYST_TOOLS, type AnalystTool, type ToolContext, type ToolOutput, type ToolProposal } from "./tools.js";
 
 /**
  * Proposing things a person then saves.
@@ -52,7 +52,13 @@ const proposeFunnel: AnalystTool = {
     },
     required: ["name", "steps", "reason"],
   },
-  async run(args: Record<string, unknown>): Promise<ToolOutput> {
+  async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutput> {
+    const duplicate = findConflict(args, ctx.existingConditions);
+    if (duplicate) {
+      throw new Error(
+        `${duplicate} is already tracked here. Propose a different sequence, or say in the reason that what is being asked for is already covered.`
+      );
+    }
     const parsed = z
       .object({ name: z.string().min(1).max(120), steps: z.array(funnelStepSchema).min(2).max(6) })
       .safeParse({ name: args.name, steps: args.steps });
@@ -103,7 +109,7 @@ const proposeDashboard: AnalystTool = {
     },
     required: ["name", "cards", "reason"],
   },
-  async run(args: Record<string, unknown>): Promise<ToolOutput> {
+  async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutput> {
     const byId = new Map(DASHBOARD_EXAMPLES.map(example => [example.id, example]));
     const parsed = z
       .object({
@@ -159,7 +165,14 @@ const proposeGoal: AnalystTool = {
     },
     required: ["name", "goalType", "reason"],
   },
-  async run(args: Record<string, unknown>): Promise<ToolOutput> {
+  async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutput> {
+    const duplicate = findConflict(args, ctx.existingConditions);
+    if (duplicate) {
+      // A prompt that says "do not repeat these" is a request. This is the check.
+      throw new Error(
+        `${duplicate} is already tracked here. Propose a different condition, or say in the reason that what is being asked for is already covered.`
+      );
+    }
     const parsed = goalBodySchema.safeParse({
       name: typeof args.name === "string" ? args.name.slice(0, 120) : undefined,
       goalType: args.goalType,
@@ -252,18 +265,46 @@ interface ProposalContext {
   today: string;
   /** The user is revising a proposal the model just made. */
   revising?: boolean;
-  /** What the page already lists. */
-  existing?: string[];
+  /** What the page already tracks, as name and condition. */
+  existing?: Array<{ name?: string; condition: string }>;
 }
+
+/**
+ * The condition a proposal would track, and whether the Site already tracks it.
+ *
+ * The name is the person's wording and the condition is what actually fires, so a
+ * rename is not a new goal: "Searched" and "Viewed search results" are the same
+ * goal when both watch /search. A prompt saying "do not repeat these" is a
+ * request, and a model asked for a tracking goal will answer in terms of what is
+ * worth tracking rather than what is already there.
+ */
+function findConflict(args: Record<string, unknown>, existing: string[] | undefined) {
+  const proposed = [args.pathPattern, args.eventName, args.valuePattern]
+    .filter(value => typeof value === "string" && value.trim())
+    .map(value => normaliseCondition(String(value)));
+  if (args.steps && Array.isArray(args.steps)) {
+    proposed.push(normaliseCondition(args.steps.map(step => `${step?.type}:${step?.value}`).join(" > ")));
+  }
+  for (const condition of existing ?? []) {
+    if (proposed.includes(normaliseCondition(condition))) return condition;
+  }
+  return undefined;
+}
+
+const normaliseCondition = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
  * The lines every proposal prompt shares: what is already tracked, and whether
  * this is a revision of something the model just proposed.
  */
 function preamble(kind: ProposalKind, context: ProposalContext) {
-  const existing = (context.existing ?? []).filter(Boolean);
+  const existing = (context.existing ?? []).filter(entry => entry?.condition);
   return `## Already tracked on this Site
-${existing.length ? existing.map(name => `- ${name}`).join("\n") : "- nothing yet"}
+${
+  existing.length
+    ? existing.map(entry => `- ${entry.name ? `${entry.name} — ` : ""}${entry.condition}`).join("\n")
+    : "- nothing yet"
+}
 Never propose any of these. What makes two of them the same is the condition on the right of the dash — the path, the event, the steps — not the wording of the name, so a rename is not a new goal. If the request is already covered, say so plainly and propose the nearest thing that is not.${
     context.revising
       ? `

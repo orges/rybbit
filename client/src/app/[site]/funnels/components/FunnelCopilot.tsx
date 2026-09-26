@@ -23,11 +23,11 @@ export function FunnelCopilot({ siteId, organizationId }: { siteId: number; orga
   const [draft, setDraft] = useState<{ proposal: FunnelProposal | null; open: boolean }>({ proposal: null, open: false });
   /** Name and steps, so a re-run of an existing funnel is recognisable as one. */
   const existing = (data ?? [])
-    .map(funnel => {
-      const steps = (funnel.steps ?? []).map(step => `${step.type}:${step.value}`).join(" → ");
-      return funnel.name && steps ? `${funnel.name} — ${steps}` : (funnel.name ?? steps);
-    })
-    .filter(Boolean);
+    .map(funnel => ({
+      ...(funnel.name ? { name: funnel.name } : {}),
+      condition: (funnel.steps ?? []).map(step => `${step.type}:${step.value}`).join(" > "),
+    }))
+    .filter(entry => entry.condition);
 
   return (
     <>

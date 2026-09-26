@@ -52,8 +52,8 @@ export interface SuggestRequest {
     rangeLabel?: string;
     timeZone?: string;
     filters?: unknown[];
-    /** What the page already lists, so a duplicate is never proposed. */
-    existing?: string[];
+    /** What the page already tracks, as name and condition. */
+    existing?: Array<{ name?: string; condition: string }>;
   };
 }
 

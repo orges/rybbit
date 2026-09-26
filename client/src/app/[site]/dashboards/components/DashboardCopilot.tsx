@@ -25,7 +25,7 @@ export function DashboardCopilot({ siteId, organizationId }: { siteId: number; o
   const createDashboard = useCreateDashboard();
   const { data: dashboards } = useGetDashboards(siteId);
   const [pending, setPending] = useState(false);
-  const existing = (dashboards ?? []).map(dashboard => dashboard.name).filter(Boolean);
+  const existing = (dashboards ?? []).map(dashboard => ({ name: dashboard.name, condition: dashboard.name }));
 
   /** Creates the dashboard and hands the editor its cards. */
   const build = async (proposal: DashboardProposal) => {

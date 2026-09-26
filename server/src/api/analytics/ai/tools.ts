@@ -54,6 +54,11 @@ export interface ToolContext {
   filters: Filter[];
   /** Rows from earlier tool calls in this run, addressable by `result_id`. */
   results: ResultStore;
+  /**
+   * Conditions already tracked on the Site, for a proposal tool to check against.
+   * Sent by the page, which already has the list.
+   */
+  existingConditions?: string[];
   signal: AbortSignal;
 }
 
