@@ -118,7 +118,11 @@ export function windowFor(args: Record<string, unknown>, ctx: ToolContext) {
       return resolvePreset(preset, ctx.timezone);
     }
   }
-  return ctx.defaultRange.startDate ? ctx.defaultRange : resolvePreset("last_90_days", ctx.timezone);
+  // A session id carries no date, so the dashboard's range is not a default worth
+  // honouring here — it is a search window, and Ask sits on "today" by default,
+  // which made every session older than today come back empty and cost a retry.
+  // The model narrows it when it has a reason, the same way it overrides filters.
+  return resolvePreset("last_90_days", ctx.timezone);
 }
 
 async function digestOne(ctx: ToolContext, sessionId: string, args: Record<string, unknown>, maxRows = MAX_TIMELINE_ROWS): Promise<SessionDigest> {
