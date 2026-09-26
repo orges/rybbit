@@ -21,7 +21,13 @@ export function FunnelCopilot({ siteId, organizationId }: { siteId: number; orga
   const { data } = useGetFunnels(siteId);
   const timeZone = useTimezone();
   const [draft, setDraft] = useState<{ proposal: FunnelProposal | null; open: boolean }>({ proposal: null, open: false });
-  const existing = (data ?? []).map(funnel => funnel.name).filter(Boolean);
+  /** Name and steps, so a re-run of an existing funnel is recognisable as one. */
+  const existing = (data ?? [])
+    .map(funnel => {
+      const steps = (funnel.steps ?? []).map(step => `${step.type}:${step.value}`).join(" → ");
+      return funnel.name && steps ? `${funnel.name} — ${steps}` : (funnel.name ?? steps);
+    })
+    .filter(Boolean);
 
   return (
     <>

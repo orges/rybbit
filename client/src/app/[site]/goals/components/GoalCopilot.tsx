@@ -18,9 +18,17 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
   const { data } = useGetGoals({ page: 1, pageSize: 50 });
   const [draft, setDraft] = useState<{ proposal: GoalProposal | null; open: boolean }>({ proposal: null, open: false });
 
-  // What the page already lists. A duplicate is not a useless suggestion to the
-  // person — it is clutter on the page they are looking at.
-  const existing = (data?.data ?? []).map(goal => goal.name || goal.config?.pathPattern || goal.config?.eventName || goal.goalType);
+  /**
+   * What the page already tracks, named *and* spelled out.
+   *
+   * The condition is what makes two goals the same goal, so a name alone is not
+   * enough: a list of names and a model asked not to repeat them produces the same
+   * /search goal under a fresh title, which is worse than no check at all.
+   */
+  const existing = (data?.data ?? []).map(goal => {
+    const condition = goal.config?.pathPattern || goal.config?.eventName || goal.config?.valuePattern || goal.goalType;
+    return goal.name ? `${goal.name} — ${condition}` : condition;
+  });
 
   return (
     <>

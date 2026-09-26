@@ -264,7 +264,7 @@ function preamble(kind: ProposalKind, context: ProposalContext) {
   const existing = (context.existing ?? []).filter(Boolean);
   return `## Already tracked on this Site
 ${existing.length ? existing.map(name => `- ${name}`).join("\n") : "- nothing yet"}
-Never propose any of these. If the request is already covered, say so plainly and propose the nearest thing that is not.${
+Never propose any of these. What makes two of them the same is the condition on the right of the dash — the path, the event, the steps — not the wording of the name, so a rename is not a new goal. If the request is already covered, say so plainly and propose the nearest thing that is not.${
     context.revising
       ? `
 
