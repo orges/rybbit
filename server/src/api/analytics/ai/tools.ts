@@ -873,7 +873,7 @@ const MAX_SQL_ROWS = 1000;
 const runSql: AnalystTool = {
   name: "run_sql",
   description:
-    "Run a read-only ClickHouse query when no other tool answers the question. The only table is `scoped_events`, one statement, no DDL. Prefer the tools above when one fits.",
+    "Run a read-only ClickHouse query when no other tool answers the question. The only table is `scoped_events`, one statement, no DDL. It is already filtered to this site and has no `site_id` column, so never filter by site — a query naming it fails. Prefer the tools above when one fits.",
   parameters: {
     type: "object",
     properties: {

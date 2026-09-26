@@ -20,13 +20,31 @@ const requestBodySchema = z.object({
   siteId: z.number().int().positive().optional(),
 });
 
+/**
+ * The one table a caller may read. Tenancy is decided here, by the wrapper, and
+ * not by the query text: a single-site scope selects from `events` with the
+ * site's own id as a bound parameter, so no query can widen it.
+ *
+ * A single-site scope also drops `site_id` from the projection. The rows are
+ * already that one site, so naming it could only mislead — `site_id = <this
+ * site>` silently re-filters, and `site_id = <another tenant>` matches nothing
+ * and reads as "that site has no traffic", a confident answer about a tenant the
+ * caller was never allowed to ask about. Without the column both are a loud
+ * UNKNOWN_IDENTIFIER. An org-wide scope keeps the column, where filtering by
+ * site is the whole point of the query.
+ */
+function scopedEventsCte(siteIds: number[]): string {
+  const columns = siteIds.length === 1 ? "* EXCEPT (site_id)" : "*";
+  return `SELECT ${columns} FROM events PREWHERE site_id IN {siteIds:Array(UInt16)}`;
+}
+
 export async function executeScopedQuery(query: string, siteIds: number[]) {
   const validationError = validateScopedQuery(query);
   if (validationError) throw new Error(validationError);
 
   const result = await clickhouseQuery.query({
     query: `WITH scoped_events AS (
-      SELECT * FROM events PREWHERE site_id IN {siteIds:Array(UInt16)}
+      ${scopedEventsCte(siteIds)}
     ) SELECT * FROM (${normalizeCustomQuery(query)}) LIMIT {limit:UInt32}`,
     format: "JSONEachRow",
     query_params: { siteIds, limit: MAX_RESULT_ROWS },

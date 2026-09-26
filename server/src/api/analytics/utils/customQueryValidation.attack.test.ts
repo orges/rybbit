@@ -4,10 +4,13 @@ import { validateScopedQuery } from "./customQueryValidation.js";
 /**
  * Attempts to break the scoped-query sandbox.
  *
- * Tenancy rests entirely on this validator: `executeScopedQuery` wraps whatever
- * passes it in `WITH scoped_events AS (SELECT * FROM events PREWHERE site_id IN
- * {siteIds})`. So a single accepted query that names a real table, redefines the
- * CTE, or truncates the wrapper is a cross-tenant read.
+ * Tenancy is not this validator's job: `executeScopedQuery` wraps whatever
+ * passes it in `WITH scoped_events AS (SELECT ... FROM events PREWHERE site_id
+ * IN {siteIds})`, with the caller's sites bound as a parameter, and a single-site
+ * scope projects the column away. A query cannot widen that set. What this
+ * validator has to stop is a query escaping the wrapper — naming a real table,
+ * redefining the CTE, truncating it — because a single accepted one is a
+ * cross-tenant read.
  */
 const reachRealTable = [
   ["plain", "SELECT * FROM events"],

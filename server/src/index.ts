@@ -210,6 +210,7 @@ import { lifecycleEmailService } from "./services/lifecycleEmails/lifecycleEmail
 import { telemetryService } from "./services/telemetryService.js";
 import { handleIdentify } from "./services/tracker/identifyService.js";
 import { trackEvent } from "./services/tracker/trackEvent.js";
+import { withRateLimit } from "./lib/withRateLimit.js";
 import { startSiteBaselineRefresh } from "./services/tracker/botBlocking/siteBaseline.js";
 import { usageService } from "./services/usageService.js";
 import { weeklyReportService } from "./services/weekyReports/weeklyReportService.js";
@@ -309,10 +310,8 @@ const generateQueryRateLimit = { max: 20, timeWindow: "1 minute" };
 // plus a model call, so it gets its own budget rather than the generate-SQL one,
 // which is sized for a single cheap statement.
 const analystRateLimit = { max: 10, timeWindow: "1 minute" };
-const withRateLimit = <T extends { preHandler: unknown }>(opts: T, limit: { max: number; timeWindow: string }) => ({
-  ...opts,
-  config: { rateLimit: limit },
-});
+// Routes declare a cap as `config.rateLimit`; withRateLimit attaches it to an
+// existing auth chain without sharing that chain's pre-handler array.
 const orgOrgRead = orgMemberScoped("org", "read");
 const orgAdminSitesWrite = orgAdminScoped("sites", "write");
 const orgAdminOrgWrite = orgAdminScoped("org", "write");
