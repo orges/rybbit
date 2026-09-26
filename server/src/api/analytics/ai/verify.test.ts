@@ -61,3 +61,35 @@ describe("unsupportedFigures", () => {
     expect(unsupportedFigures("Sessions were 19,048.", [])).toEqual(["19,048"]);
   });
 });
+
+describe("figures inside JSON arrays", () => {
+  // Tool output is mostly JSON, so almost every figure a tool returns follows a
+  // comma. Reading the separator as part of the number filed 21.99 as 10021.99 and
+  // flagged the model's correctly rounded 22.0% as invented.
+  const retention = JSON.stringify({
+    cohorts: [
+      { cohort: "2026-09-21", size: 6280, retained_percent: [100, null, null] },
+      { cohort: "2026-09-14", size: 25322, retained_percent: [100, 3.07, null] },
+      { cohort: "2026-09-07", size: 1296, retained_percent: [100, 21.99, 9.03] },
+    ],
+  });
+
+  it("recognises every element of an array, not only the last", () => {
+    expect(unsupportedFigures("cohorts of **6,280**, **25,322** and **1,296** users", [retention])).toEqual([]);
+  });
+
+  it("accepts a figure the model rounded to the precision it chose", () => {
+    // 21.99 quoted as 22.0 is rounding, not fabrication.
+    expect(unsupportedFigures("retained **22.0%** then **9.0%**", [retention])).toEqual([]);
+    expect(unsupportedFigures("retained **3.1%**", [retention])).toEqual([]);
+  });
+
+  it("still catches a figure no array element supports", () => {
+    expect(unsupportedFigures("retained **41.7%**", [retention])).toEqual(["41.7%"]);
+    expect(unsupportedFigures("**77,100** users", [retention])).toEqual(["77,100"]);
+  });
+
+  it("keeps a thousands separator inside a number", () => {
+    expect(unsupportedFigures("**1,296** users", [retention])).toEqual([]);
+  });
+});

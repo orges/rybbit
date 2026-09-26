@@ -43,12 +43,24 @@ function candidates(text: string): Candidate[] {
   return found;
 }
 
+/**
+ * A number in tool output, thousands-separated or not.
+ *
+ * The comma is part of a number only when it groups three digits: in `[100,
+ * 21.99, 9.03]` the first comma separates array elements and the second is a
+ * thousands separator. A looser `\d[\d,]*` cannot tell them apart and swallows
+ * the separator, which files 21.99 as 10021.99 — and since tool output is mostly
+ * JSON arrays, that silently corrupted most of the supported set and flagged
+ * correct answers as fabricated.
+ */
+const TOOL_NUMBER = /\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g;
+
 /** Every number a tool returned, in the forms an answer might quote it in. */
 function supportedFigures(outputs: string[]) {
   const supported = new Set<string>();
   for (const output of outputs) {
     if (!output) continue;
-    for (const match of output.matchAll(/\d[\d,]*\.?\d*/g)) {
+    for (const match of output.matchAll(TOOL_NUMBER)) {
       const value = normalize(match[0]);
       supported.add(value);
       supported.add(value.replace(/\.0+$/, ""));
