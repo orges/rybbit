@@ -285,6 +285,15 @@ export function getCteNames(query: string) {
   return cteNames;
 }
 
+/**
+ * Physical tables the scoped wrapper does not site-filter.
+ *
+ * `executeScopedQuery` wraps a query in `WITH scoped_events AS (SELECT * FROM
+ * events PREWHERE site_id IN …)`, which leaves exactly one table in scope that
+ * carries every tenant's rows. Naming it is never legitimate, in any clause.
+ */
+const UNSCOPED_TABLES = new Set(["events"]);
+
 // Identifiers that end a FROM clause's comma-separated table list. Once one of these
 // appears at the top paren level, later commas belong to another clause (GROUP BY,
 // ORDER BY, a UNIONed SELECT, …) rather than the table list.
@@ -352,9 +361,23 @@ export function collectTableReferences(query: string): string[] {
     const afterKeyword = match.index + match[0].length;
     const keyword = match[1].toLowerCase();
 
-    // ARRAY JOIN takes an array expression (a column or function like
-    // mapKeys(...)), not a table reference — skip it.
+    // ARRAY JOIN's operand is ambiguous by syntax alone: ClickHouse resolves a bare
+    // identifier against the left relation's columns, and the shipped example
+    // queries use both a plain column (`ARRAY JOIN pages AS page`) and a function
+    // call (`ARRAY JOIN mapKeys(url_parameters) AS parameter`). Neither can be told
+    // apart from a table reference without the schema, so this does not try.
+    //
+    // It does check the one name that matters. `scoped_events` is a CTE over
+    // `events`, so `events` is the only table in scope that is *not* site-filtered,
+    // and a reference to it in any position means the query left the wrapper. That
+    // is checked here rather than by the allowlist, which would also reject the
+    // legitimate column operands above.
     if (keyword.includes("array")) {
+      const start = skipWhitespace(query, afterKeyword);
+      if (start < length && isIdentifierStart(query[start])) {
+        const [identifier] = readIdentifier(query, start);
+        if (UNSCOPED_TABLES.has(identifier.toLowerCase())) references.push(identifier);
+      }
       continue;
     }
 
@@ -539,7 +562,12 @@ export function sanitizeClickhouseError(error: unknown): string {
   if (!raw) {
     return "Failed to run query";
   }
-  const code = Number(/^Code: (\d+)\./.exec(raw)?.[1]);
+  // The numeric code arrives on the error object; the "Code: NN." prefix only
+  // appears in the CLI's plain-text output. Reading the message alone meant every
+  // real failure collapsed to "Failed to run query" — including codes that are on
+  // the list below and are exactly what the query author needs to see.
+  const onError = (error as { code?: unknown } | null)?.code;
+  const code = typeof onError === "number" ? onError : Number(/^Code: (\d+)\./.exec(raw)?.[1]);
   if (code === 497 || /Not enough privileges/i.test(raw)) {
     return "Query references data outside scoped_events";
   }
