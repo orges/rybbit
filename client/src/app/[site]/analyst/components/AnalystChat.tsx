@@ -72,14 +72,42 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const renameConversation = useRenameConversation(organizationId, siteId);
   const addMemory = useAddMemory(organizationId, siteId);
 
-  const { messages, conversationId, streaming, send, stop, load } = useChatStream({
+  // A run finishes in the thread it was asked in, not the one on screen. When that
+  // thread is the one being read, the answer exists only in the database until it
+  // is fetched — its deltas were patched into a message this view no longer held.
+  //
+  // `load` comes from the hook below, so it is held in a ref: that keeps this
+  // callback referentially stable, which matters because `send` depends on it.
+  const loadRef = useRef<(messages: ChatMessage[], id: string) => void>(() => {});
+  const viewingRef = useRef<string | null>(null);
+
+  const onRunSettled = useCallback(
+    async (settledId: string | null) => {
+      if (!settledId || settledId !== viewingRef.current) return;
+      try {
+        const detail = await getConversation(organizationId, siteId, settledId);
+        loadRef.current(detail.messages ?? [], detail.id);
+      } catch {
+        // Leave the thread as it is; reading it again fetches the answer anyway.
+      }
+    },
+    [organizationId, siteId]
+  );
+
+  const { messages, conversationId, liveThreads, streaming, send, stop, load } = useChatStream({
     organizationId,
     siteId,
     context,
     onConversation: () => {
       void conversations.refetch();
     },
+    onRunSettled,
   });
+
+  useEffect(() => {
+    viewingRef.current = conversationId;
+    loadRef.current = load;
+  }, [conversationId, load]);
 
   const loadConversation = useCallback(
     async (id: string | null) => {
@@ -190,6 +218,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             setRailOpen(false);
             setRailCollapsed(value => !value);
           }}
+          liveThreads={liveThreads}
           footer={<ProjectMemory organizationId={organizationId} siteId={siteId} />}
           onSelect={id => {
             setRailOpen(false);

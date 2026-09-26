@@ -37,6 +37,7 @@ export function ConversationRail({
   collapsed,
   onToggle,
   footer,
+  liveThreads = [],
   loading,
   className,
   search,
@@ -50,6 +51,8 @@ export function ConversationRail({
   onRename: (id: string, title: string) => void;
   collapsed: boolean;
   onToggle: () => void;
+  /** Threads with a run still going, so a background answer is not a silent wait. */
+  liveThreads?: string[];
   /** Pinned below the thread list — the rail does not know what this is. */
   footer?: ReactNode;
   loading?: boolean;
@@ -155,8 +158,16 @@ export function ConversationRail({
                         {conversation.snippet}
                       </span>
                     ) : null}
-                    <span className="block text-[10px] text-neutral-500 dark:text-neutral-400">{relativeTime(conversation.updatedAt)}</span>
+                    <span className="block text-[10px] text-neutral-500 dark:text-neutral-400">
+                      {liveThreads.includes(conversation.id) ? t("Answering…") : relativeTime(conversation.updatedAt)}
+                    </span>
                   </button>
+                  {liveThreads.includes(conversation.id) && (
+                    <span
+                      aria-hidden
+                      className="absolute left-2 top-1.5 size-1.5 animate-pulse rounded-full bg-emerald-500"
+                    />
+                  )}
                   <div className="absolute right-1 top-1 hidden items-center gap-0.5 group-hover/thread:flex">
                     <Button
                       type="button"

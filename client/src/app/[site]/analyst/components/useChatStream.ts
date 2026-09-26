@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   streamAnalystMessage,
   type ChatMessage,
@@ -49,19 +49,51 @@ export interface UseChatStreamOptions {
   siteId: number;
   context: MessageContext;
   onConversation?: (conversationId: string, title?: string) => void;
+  /**
+   * A run finished, successfully or not. The conversation is reported because a
+   * run is not tied to the view: it finishes in whatever thread it was asked in.
+   */
+  onRunSettled?: (conversationId: string | null) => void;
 }
 
-export function useChatStream({ organizationId, siteId, context, onConversation }: UseChatStreamOptions) {
+/**
+ * Stands in for a run whose thread has no id yet — a new chat is only identified
+ * by the server's first event, and until then it still needs a slot to occupy.
+ */
+const NEW_THREAD = "\u0000new";
+
+export function useChatStream({ organizationId, siteId, context, onConversation, onRunSettled }: UseChatStreamOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [streaming, setStreaming] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  /**
+   * Threads with a run still going, so more than one can be in flight.
+   *
+   * A run outlives the view on purpose: switching threads leaves it working, and
+   * the answer is there when you come back. That only works if the composer is not
+   * held hostage by a run in some other thread, so this is per thread rather than
+   * one global flag.
+   */
+  const [liveThreads, setLiveThreads] = useState<string[]>([]);
+  const runsRef = useRef(new Map<string, AbortController>());
+  const viewedRef = useRef<string | null>(null);
   const assistantIdRef = useRef<string>("");
+
+  // Which thread is on screen, readable from a callback that would otherwise close
+  // over a stale value — `stop` has to abort the run the reader can see.
+  useEffect(() => {
+    viewedRef.current = conversationId;
+  }, [conversationId]);
+
+  /** True only while the thread on screen is the one still answering. */
+  const streaming = liveThreads.includes(conversationId ?? NEW_THREAD);
 
   const send = useCallback(
     async (text: string, options?: { regenerate?: boolean; editOfMessageId?: string }) => {
       const prompt = text.trim();
-      if (!prompt || streaming) return;
+      if (!prompt) return;
+      // One run per thread, but a different thread may already be answering.
+      const thread = conversationId ?? NEW_THREAD;
+      if (runsRef.current.has(thread)) return;
 
       const userMessage: ChatMessage = {
         id: `local-user-${Date.now()}`,
@@ -80,10 +112,12 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
         if (options?.regenerate && current.length > 1) return [...current.slice(0, current.length - 1), assistant];
         return [...current, userMessage, assistant];
       });
-      setStreaming(true);
-
       const controller = new AbortController();
-      abortRef.current = controller;
+      runsRef.current.set(thread, controller);
+      setLiveThreads(current => (current.includes(thread) ? current : [...current, thread]));
+      // The slot a run occupies moves once the server names its thread, and every
+      // later reference — including `finally` — has to follow it there.
+      let runKey = thread;
 
       const body: SendMessageRequest = {
         siteId,
@@ -96,10 +130,21 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
 
       const onEvent = (event: ChatStreamEvent) => {
         switch (event.type) {
-          case "conversation":
+          case "conversation": {
+            const previousKey = runKey;
+            if (previousKey !== event.conversationId) {
+              const running = runsRef.current.get(previousKey);
+              if (running) {
+                runsRef.current.delete(previousKey);
+                runsRef.current.set(event.conversationId, running);
+              }
+              setLiveThreads(current => current.map(id => (id === previousKey ? event.conversationId : id)));
+              runKey = event.conversationId;
+            }
             setConversationId(event.conversationId);
             onConversation?.(event.conversationId);
             break;
+          }
           case "reasoning_delta":
             setMessages(current => patchMessage(current, assistantId, message => ({ ...message, reasoning: (message.reasoning ?? "") + event.text })));
             break;
@@ -184,33 +229,33 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
           );
         }
       } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        setStreaming(false);
+        runsRef.current.delete(runKey);
+        setLiveThreads(current => current.filter(id => id !== runKey));
         setMessages(current => patchLastAssistant(current, message => ({ ...message, pending: false })));
+        // The id the run was given, not the one this closure was created with —
+        // a new thread has none until the server names it mid-run.
+        onRunSettled?.(runKey === NEW_THREAD ? null : runKey);
       }
     },
-    [context, conversationId, onConversation, organizationId, siteId, streaming]
+    [context, conversationId, onConversation, onRunSettled, organizationId, siteId]
   );
 
+  /** Stops the run in the thread on screen. Runs in other threads keep going. */
   const stop = useCallback(() => {
-    abortRef.current?.abort();
-    setStreaming(false);
+    runsRef.current.get(viewedRef.current ?? NEW_THREAD)?.abort();
   }, []);
 
+  /** New chat: clears the view. It does not stop anything. */
   const reset = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
     setMessages([]);
     setConversationId(null);
-    setStreaming(false);
   }, []);
 
   const load = useCallback((loaded: ChatMessage[], id: string) => {
-    // Opening another thread abandons this one mid-answer. Without the abort its
-    // stream keeps running, and its cleanup patches the newest assistant message
-    // here — a message in a thread it has nothing to do with.
-    abortRef.current?.abort();
-    abortRef.current = null;
+    // Nothing is aborted here. A run asked in another thread carries on, and its
+    // deltas patch a message id that is not in this list, so they land nowhere
+    // rather than corrupting this thread.
+    //
     // Threads stored before artifacts were de-duplicated can hold the same one
     // several times; the reader should still see it once.
     setMessages(
@@ -223,8 +268,7 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
       }))
     );
     setConversationId(id);
-    setStreaming(false);
   }, []);
 
-  return { messages, conversationId, streaming, send, stop, reset, load };
+  return { messages, conversationId, liveThreads, streaming, send, stop, reset, load };
 }

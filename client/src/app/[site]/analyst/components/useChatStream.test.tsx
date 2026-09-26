@@ -15,8 +15,8 @@ vi.mock("@/api/analyst/endpoints/analyst", async importOriginal => {
 const context = { startDate: "2026-09-19", endDate: "2026-09-25", timeZone: "UTC", filters: [] };
 const lastAssistant = (messages: Array<{ role: string }>) => messages.filter(m => m.role === "assistant").at(-1);
 
-function renderStream() {
-  return renderHook(() => useChatStream({ organizationId: "org-1", siteId: 42, context }));
+function renderStream(options: { onRunSettled?: (conversationId: string | null) => void } = {}) {
+  return renderHook(() => useChatStream({ organizationId: "org-1", siteId: 42, context, ...options }));
 }
 
 const emit = (events: ChatStreamEvent[]) => {
@@ -168,5 +168,69 @@ describe("answer verification", () => {
       await result.current.send("how many users?");
     });
     expect(lastAssistant(result.current.messages)).toMatchObject({ unverified: ["21,904"] });
+  });
+});
+
+describe("a run outlives the thread you are looking at", () => {
+  /** A stream that stays open until the test releases it. */
+  function pendingStream() {
+    const gates: Array<() => void> = [];
+    streamAnalystMessage.mockImplementation(
+      (...args: unknown[]) =>
+        new Promise<void>(resolve => {
+          const onEvent = args[3] as (event: ChatStreamEvent) => void;
+          onEvent?.({ type: "conversation", conversationId: "c1" });
+          gates.push(() => {
+            onEvent?.({ type: "text_delta", text: "The answer." });
+            onEvent?.({ type: "done", stopped: false, steps: 1 });
+            resolve();
+          });
+        })
+    );
+    return gates;
+  }
+
+  it("keeps running after another thread is opened, and reports when it lands", async () => {
+    const gates = pendingStream();
+    const onRunSettled = vi.fn();
+    const { result } = renderStream({ onRunSettled });
+
+    await act(async () => {
+      void result.current.send("count sessions");
+    });
+    expect(result.current.streaming).toBe(true);
+
+    // The reader gives up on this thread and opens another. The run is not ours
+    // to cancel — the stop button is.
+    act(() => {
+      result.current.load([], "c2");
+    });
+    expect(result.current.liveThreads).toContain("c1");
+    expect(result.current.streaming).toBe(false);
+
+    await act(async () => {
+      gates[0]();
+    });
+
+    // It finished in c1, which is not the thread on screen, so no refresh here.
+    expect(onRunSettled).toHaveBeenCalledWith("c1");
+    expect(result.current.liveThreads).toEqual([]);
+  });
+
+  it("refreshes the thread on screen when its own run finishes", async () => {
+    const gates = pendingStream();
+    const onRunSettled = vi.fn();
+    const { result } = renderStream({ onRunSettled });
+
+    await act(async () => {
+      void result.current.send("count sessions");
+    });
+    act(() => {
+      result.current.load([], "c1");
+    });
+    await act(async () => {
+      gates[0]();
+    });
+    expect(onRunSettled).toHaveBeenCalledWith("c1");
   });
 });
