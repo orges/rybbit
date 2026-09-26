@@ -35,6 +35,7 @@ export function CopilotPanel<T extends AnyProposal>({
   loadingLabel,
   actionLabel,
   existing = [],
+  initialAsk,
   render,
   onOpen,
 }: {
@@ -48,6 +49,12 @@ export function CopilotPanel<T extends AnyProposal>({
   actionLabel: string;
   /** What the page already tracks, as name and condition. */
   existing?: Array<{ name?: string; condition: string }>;
+  /**
+   * Prefilled, but not run. A copilot that fires on its own has spent a model's
+   * worth of work before anyone has decided they wanted it; the person presses
+   * the button, as they would have anyway.
+   */
+  initialAsk?: string;
   render: (proposal: T) => ReactNode;
   onOpen: (proposal: T) => void;
 }) {
@@ -55,7 +62,7 @@ export function CopilotPanel<T extends AnyProposal>({
   const time = useStore(state => state.time);
   const filters = useStore(state => state.filters);
   const timeZone = useTimezone();
-  const [ask, setAsk] = useState("");
+  const [ask, setAsk] = useState(initialAsk ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SuggestionResult<T> | null>(null);

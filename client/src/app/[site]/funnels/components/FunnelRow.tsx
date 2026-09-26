@@ -13,6 +13,7 @@ import { useGetFunnel } from "../../../../api/analytics/hooks/funnels/useGetFunn
 import { FunnelStepType, SavedFunnel } from "../../../../api/analytics/endpoints";
 import { ThreeDotLoader } from "../../../../components/Loaders";
 import { EditFunnelDialog } from "./EditFunnel";
+import { FunnelFixer } from "./FunnelFixer";
 import { Funnel } from "./Funnel";
 import { EventTypeIcon } from "../../../../components/EventIcons";
 import { resolvePropertyFilters, targetTypeToEventType } from "../../../../lib/events";
@@ -192,7 +193,17 @@ export function FunnelRow({ funnel, index }: FunnelRowProps) {
                 {t("Error loading funnel:")} {error instanceof Error ? error.message : t("Unknown error")}
               </div>
             ) : data && data.length > 0 ? (
-              <Funnel data={data} steps={funnel.steps} isError={isError} error={error} isPending={isPending} />
+              <>
+                <Funnel data={data} steps={funnel.steps} isError={isError} error={error} isPending={isPending} />
+                {/* Nothing enters at step one: a failure the chart above cannot
+                    explain, so offer one that can look at the site's real traffic. */}
+                {isSuccess && data[0]?.sessions === 0 && (
+                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                    <p className="mb-2 text-xs text-amber-800 dark:text-amber-300">{t("No sessions enter this funnel at its first step.")}</p>
+                    <FunnelFixer funnel={funnel} />
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center p-6 text-neutral-500">{t("No funnel data available")}</div>
             )}
