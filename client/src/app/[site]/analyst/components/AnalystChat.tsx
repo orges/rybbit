@@ -6,7 +6,6 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { toast } from "react-hot-toast";
 import {
   getConversation,
-  sendFeedback,
   type ChatMessage,
   type MessageContext,
 } from "@/api/analyst/endpoints/analyst";
@@ -72,7 +71,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const renameConversation = useRenameConversation(organizationId, siteId);
   const addMemory = useAddMemory(organizationId, siteId);
 
-  const { messages, conversationId, streaming, send, stop, load, setRating } = useChatStream({
+  const { messages, conversationId, streaming, send, stop, load } = useChatStream({
     organizationId,
     siteId,
     context,
@@ -155,15 +154,6 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
   const retry = (message: ChatMessage) => {
     const question = [...messages].reverse().find(entry => entry.role === "user" && entry.id !== message.id);
     if (question) void send(question.content, { regenerate: true });
-  };
-
-  const feedback = async (message: ChatMessage, rating: number) => {
-    setRating(message.id, rating);
-    try {
-      await sendFeedback(organizationId, { siteId, messageId: message.id, rating });
-    } catch {
-      toast.error(t("Could not save feedback"));
-    }
   };
 
   const deleteThread = (id: string) => {
@@ -252,7 +242,6 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
                     message={message}
                     onRetry={() => retry(message)}
                     onEdit={() => editQuestion(message)}
-                    onFeedback={rating => void feedback(message, rating)}
                     siteId={siteId}
                     onFollowup={value => {
                       setDraft(value);

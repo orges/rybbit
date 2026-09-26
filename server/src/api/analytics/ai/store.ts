@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "../../../db/postgres/postgres.js";
-import { aiConversations, aiFeedback, aiMemories, aiMessages, aiRuns } from "../../../db/postgres/schema.js";
+import { aiConversations, aiMemories, aiMessages, aiRuns } from "../../../db/postgres/schema.js";
 import type { Artifact } from "./presentation.js";
 import type { ToolCallRecord } from "./agent.js";
 
@@ -324,39 +324,4 @@ export async function deleteMemory(id: string, organizationId: string, siteId: n
     )
     .returning({ id: aiMemories.id });
   return deleted.length > 0;
-}
-
-/**
- * Records a rating against one of the caller's own messages.
- *
- * `aiFeedback` keys on `messageId` alone, so ownership is settled through the
- * message's conversation: an id from another organization must not be writable
- * just because the caller can reach this endpoint.
- */
-export async function setFeedback(
-  messageId: string,
-  rating: number,
-  comment: string | undefined,
-  owner: { userId: string; organizationId: string; siteId: number }
-) {
-  const [message] = await db
-    .select({ id: aiMessages.id })
-    .from(aiMessages)
-    .innerJoin(aiConversations, eq(aiMessages.conversationId, aiConversations.id))
-    .where(
-      and(
-        eq(aiMessages.id, messageId),
-        eq(aiConversations.userId, owner.userId),
-        eq(aiConversations.organizationId, owner.organizationId),
-        eq(aiConversations.siteId, owner.siteId)
-      )
-    )
-    .limit(1);
-  if (!message) return false;
-
-  await db
-    .insert(aiFeedback)
-    .values({ messageId, rating, comment: comment?.slice(0, 1000) })
-    .onConflictDoUpdate({ target: aiFeedback.messageId, set: { rating, comment: comment?.slice(0, 1000) } });
-  return true;
 }

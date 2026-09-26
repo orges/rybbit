@@ -25,7 +25,6 @@ import {
   analystChat,
   analystSuggest,
   handleConversations,
-  handleFeedback,
   handleMemories,
   createAnnotation,
   createDashboard,
@@ -546,7 +545,6 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     orgSqlRead,
     handleConversations
   );
-  fastify.post("/organizations/:organizationId/analytics/feedback", orgSqlRead, handleFeedback);
   fastify.get("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
   fastify.post("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
   fastify.delete("/organizations/:organizationId/analytics/memories/:memoryId", orgSqlRead, handleMemories);

@@ -62,7 +62,6 @@ export {
   analystChat,
   analystSuggest,
   handleConversations,
-  handleFeedback,
   handleMemories,
   ANALYST_EXAMPLE_PROMPTS,
 } from "./ai/routes.js";

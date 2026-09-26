@@ -81,7 +81,6 @@ export interface ChatMessage {
   unverified?: string[];
   pending?: boolean;
   error?: string;
-  rating?: number;
   createdAt?: string;
 }
 
@@ -131,10 +130,6 @@ export function renameConversation(organizationId: string, siteId: number, id: s
 
 export function deleteConversation(organizationId: string, siteId: number, id: string) {
   return authedFetch<{ success: true }>(`${conversationsUrl(organizationId)}/${id}`, { siteId }, { method: "DELETE" });
-}
-
-export function sendFeedback(organizationId: string, body: { siteId: number; messageId: string; rating: number; comment?: string }) {
-  return authedFetch<{ success: true }>(`/organizations/${organizationId}/analytics/feedback`, undefined, { method: "POST", data: body });
 }
 
 export function listMemories(organizationId: string, siteId: number) {

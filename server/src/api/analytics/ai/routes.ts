@@ -19,7 +19,7 @@ import { deriveTitle } from "./title.js";
  * HTTP surface of the analyst.
  *
  * One streaming endpoint does the work, everything else is bookkeeping:
- * conversations, renames, feedback, and the project memory that is injected
+ * conversations, renames, and the project memory that is injected
  * into the next prompt.
  */
 
@@ -447,40 +447,6 @@ export async function handleConversations(
   } catch (error) {
     request.log.error(error, "Failed to access AI conversations");
     return reply.status(500).send({ error: "Could not load conversation history" });
-  }
-}
-
-const feedbackBody = z.object({
-  siteId: z.number().int().positive(),
-  messageId: z.string().uuid(),
-  rating: z.number().int().min(-1).max(1),
-  comment: z.string().max(1000).optional(),
-});
-
-export async function handleFeedback(
-  request: FastifyRequest<{ Params: { organizationId: string }; Body: unknown }>,
-  reply: FastifyReply
-) {
-  const params = conversationParams.safeParse(request.params);
-  const body = feedbackBody.safeParse(request.body);
-  if (!params.success || !body.success) return reply.status(400).send({ error: "Invalid feedback" });
-  const userId = request.user?.id;
-  if (!userId) return reply.status(403).send({ error: "A user session is required" });
-  const { organizationId } = params.data;
-  const { siteId, messageId, rating, comment } = body.data;
-  if (!(await authorize(request, organizationId, siteId))) {
-    return reply.status(403).send({ error: "No access to the requested site" });
-  }
-  try {
-    // 404 rather than 403: a message in another organization is not this caller's
-    // to know about, and a 403 would confirm the id exists.
-    if (!(await store.setFeedback(messageId, rating, comment, { userId, organizationId, siteId }))) {
-      return reply.status(404).send({ error: "Message not found" });
-    }
-    return reply.send({ success: true });
-  } catch (error) {
-    request.log.error(error, "Failed to record AI feedback");
-    return reply.status(500).send({ error: "Could not record feedback" });
   }
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Copy, Filter, Globe, Pencil, RefreshCw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
+import { CalendarDays, Copy, Filter, Globe, Pencil, RefreshCw, TriangleAlert } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useState, type ReactNode } from "react";
 import type { AnalystArtifact, ChatMessage, MessageContext } from "@/api/analyst/endpoints/analyst";
@@ -57,11 +57,9 @@ function ContextChips({ context }: { context?: MessageContext }) {
 function MessageActions({
   message,
   onRetry,
-  onFeedback,
 }: {
   message: ChatMessage;
   onRetry: () => void;
-  onFeedback: (rating: number) => void;
 }) {
   const t = useExtracted();
   const [copied, setCopied] = useState(false);
@@ -83,26 +81,6 @@ function MessageActions({
       <Button type="button" variant="ghost" size="smIcon" aria-label={t("Try again")} onClick={onRetry}>
         <RefreshCw className="size-3.5" />
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="smIcon"
-        aria-label={t("Good answer")}
-        onClick={() => onFeedback(1)}
-        className={cn(message.rating === 1 && "opacity-100 text-emerald-500")}
-      >
-        <ThumbsUp className="size-3.5" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="smIcon"
-        aria-label={t("Bad answer")}
-        onClick={() => onFeedback(-1)}
-        className={cn(message.rating === -1 && "opacity-100 text-red-500")}
-      >
-        <ThumbsDown className="size-3.5" />
-      </Button>
     </div>
   );
 }
@@ -111,14 +89,12 @@ export function MessageItem({
   message,
   onRetry,
   onEdit,
-  onFeedback,
   onFollowup,
   siteId,
 }: {
   message: ChatMessage;
   onRetry: () => void;
   onEdit: () => void;
-  onFeedback: (rating: number) => void;
   onFollowup: (value: string) => void;
   siteId: number;
 }) {
@@ -180,7 +156,7 @@ export function MessageItem({
         {message.unverified?.length ? <UnverifiedFigures figures={message.unverified} /> : null}
         {message.pending && !hasContent && !message.toolCalls?.length && <ThinkingDots />}
         {message.stopped && <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{t("Stopped")}</p>}
-        {hasContent && !message.pending && <MessageActions message={message} onRetry={onRetry} onFeedback={onFeedback} />}
+        {hasContent && !message.pending && <MessageActions message={message} onRetry={onRetry} />}
         {message.usage?.completion_tokens ? (
           <p className="text-[10px] tabular-nums text-neutral-400">
             {`${message.usage.prompt_tokens ?? 0} in · ${message.usage.completion_tokens} out`}

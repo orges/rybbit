@@ -226,9 +226,5 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
     setStreaming(false);
   }, []);
 
-  const setRating = useCallback((messageId: string, rating: number) => {
-    setMessages(current => patchMessage(current, messageId, message => ({ ...message, rating })));
-  }, []);
-
-  return { messages, conversationId, streaming, send, stop, reset, load, setRating };
+  return { messages, conversationId, streaming, send, stop, reset, load };
 }
