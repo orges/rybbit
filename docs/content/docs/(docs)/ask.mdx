@@ -53,6 +53,25 @@ Some context is not in the data: what a "signup" means internally, which campaig
 
 Run `/usage` in any thread to see how many tokens that conversation has used.
 
+## What leaves your instance
+
+Enabling Ask sends data to whichever model endpoint you configure. This is worth reading before you turn it on, particularly if you self-host Rybbit to keep visitor data on your own infrastructure.
+
+Sent to the model on every question:
+
+- **Your question, and the conversation around it** — the last 20 turns of the thread.
+- **Project memory** — everything added with `/remember`, on every question, for every thread on that Site.
+- **Rows from your analytics**, including page titles, URLs, referrers, custom event names and event property values. These are stripped of control characters, not of content.
+- **The Site's name** and the dashboard filters in effect when you asked.
+
+Not sent: session replay recordings, raw row data outside what a tool returned, and anything belonging to another Site or organization. Every tool is read-only and bound to the one Site you are asking about, and Ask cannot write, save or delete anything.
+
+The trade is that the analysis happens wherever the model runs. If that matters — and for visitor-level strings it often does — point `OPENROUTER_API_URL` at a gateway you control. `OPENROUTER_API_URL`, `OPENROUTER_MODEL` and `OPENROUTER_API_KEY` are all it takes; there is no separate privacy mode to configure.
+
+## What is stored
+
+Questions, answers, the tool trail and any `/remember` notes are kept in your Postgres so threads survive a restart, and they stay until you delete the thread. There is no automatic expiry. Deleting a user, organization or Site removes them by cascade.
+
 ## Configuration
 
 Ask is off until an OpenAI-compatible chat completions endpoint is configured. Set these in `.env` and restart:

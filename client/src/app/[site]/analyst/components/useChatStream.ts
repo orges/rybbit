@@ -206,6 +206,11 @@ export function useChatStream({ organizationId, siteId, context, onConversation 
   }, []);
 
   const load = useCallback((loaded: ChatMessage[], id: string) => {
+    // Opening another thread abandons this one mid-answer. Without the abort its
+    // stream keeps running, and its cleanup patches the newest assistant message
+    // here — a message in a thread it has nothing to do with.
+    abortRef.current?.abort();
+    abortRef.current = null;
     // Threads stored before artifacts were de-duplicated can hold the same one
     // several times; the reader should still see it once.
     setMessages(

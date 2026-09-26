@@ -106,6 +106,13 @@ export interface PresentationOutput extends ToolOutput {
 
 const MAX_SERIES = 12;
 const MAX_TABLE_ROWS = 100;
+/**
+ * The most points a chart may carry. A point becomes an SVG node in the browser
+ * and a line in the artifact persisted with the message, so the cap belongs here
+ * as well as in the tool that produced the rows: this is the one place every
+ * chart passes through, whatever filled the result.
+ */
+const MAX_CHART_POINTS = 2_000;
 
 /** A label that is a point in time, so the order on the axis is chronological. */
 const TIME_LABEL = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/;
@@ -180,6 +187,11 @@ const showChart: AnalystTool = {
       }
     }
     if (points.length < 2) throw new Error("A chart needs at least two rows of data");
+    if (points.length > MAX_CHART_POINTS) {
+      throw new Error(
+        `That result has ${points.length.toLocaleString("en-US")} rows, and a chart reads badly past ${MAX_CHART_POINTS}. Aggregate it more coarsely first — a wider time bucket, or fewer rows from the query.`
+      );
+    }
     if (points.some(point => !Number.isFinite(point.value))) {
       throw new Error(`Column "${metric}" must hold numbers on every row to be charted`);
     }

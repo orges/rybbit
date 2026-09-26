@@ -150,6 +150,23 @@ export function timeStatementFor(range: ResolvedRange, timezone: string) {
  * month, weekly past that. The model can override it, but defaulting beats
  * letting it pick "hour" for a quarter and produce 2,000 points.
  */
+/**
+ * How many buckets of `size` a range holds.
+ *
+ * The other half of `defaultBucket`: that one picks a sensible granularity, this
+ * one says whether the granularity the model asked for is readable over the range
+ * it asked for. An unbounded range counts zero rather than Infinity, so a cap
+ * check cannot be side-stepped by asking for a range with no dates in it.
+ */
+export function bucketsIn(range: ResolvedRange, size: "hour" | "day" | "week") {
+  if (!range.startDate || !range.endDate) return 0;
+  const start = DateTime.fromISO(range.startDate);
+  const end = DateTime.fromISO(range.endDate);
+  if (!start.isValid || !end.isValid) return 0;
+  const days = Math.round(end.diff(start, "days").days) + 1;
+  return size === "hour" ? days * 24 : size === "week" ? Math.ceil(days / 7) : days;
+}
+
 export function defaultBucket(range: ResolvedRange): "hour" | "day" | "week" {
   if (!range.startDate || !range.endDate) return "day";
   const start = DateTime.fromISO(range.startDate);

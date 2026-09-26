@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 // they pull in, which needs a live base URL just to import.
 vi.mock("./tools.js", () => ({ ANALYST_TOOLS: [] }));
 
-import { defaultBucket, previousRange, resolvePreset, resolveToolRange } from "./time.js";
+import { bucketsIn, defaultBucket, previousRange, resolvePreset, resolveToolRange } from "./time.js";
 import { ALL_TOOLS, ResultStore } from "./presentation.js";
 import { PROPOSAL_TOOLS } from "./proposal.js";
 import type { ToolContext, ToolRow } from "./tools.js";
@@ -360,5 +360,52 @@ describe("proposing something already tracked", () => {
         ["page:/ > page:/SEARCH"]
       )
     ).rejects.toThrow("already tracked");
+  });
+});
+
+describe("how many points a chart may carry", () => {
+  /**
+   * A point becomes an SVG node in the browser and a line in the artifact stored
+   * with the message, so an unbounded row set is a rendering and a storage cost,
+   * not just a big response. Both layers are checked: the tool that can produce
+   * the rows, and the one place every chart passes through.
+   */
+  const hourlyRows = (count: number) => {
+    const start = DateTime.fromISO("2025-01-01T00:00:00Z", { zone: "utc" });
+    return Array.from({ length: count }, (_, index) => ({
+      time: start.plus({ hours: index }).toFormat("yyyy-LL-dd HH:mm:ss"),
+      sessions: index,
+    }));
+  };
+
+  it("refuses a bucket whose point count would be unreadable, and names the alternatives", async () => {
+    const tool = ALL_TOOLS.get("show_chart")!;
+    const results = new ResultStore();
+    results.add(hourlyRows(17_520), "get_timeseries");
+    await expect(
+      tool.run({ result_id: "r1", title: "t", type: "line", dimension: "time", metric: "sessions" }, context(results))
+    ).rejects.toThrow(/past 2000/);
+  });
+
+  it("still charts a large-but-sane result", async () => {
+    const tool = ALL_TOOLS.get("show_chart")!;
+    const results = new ResultStore();
+    results.add(hourlyRows(1_000), "get_timeseries");
+    const output = await tool.run(
+      { result_id: "r1", title: "t", type: "line", dimension: "time", metric: "sessions" },
+      context(results)
+    );
+    expect((output.artifact as { points: unknown[] }).points).toHaveLength(1_000);
+  });
+
+  it("sizes a bucket against its range rather than trusting the model's choice", () => {
+    const quarter = { startDate: "2026-01-01", endDate: "2026-03-31", label: "quarter" };
+    // 90 days at hourly is unreadable, which is the case the default exists for.
+    expect(bucketsIn(quarter, "hour")).toBe(90 * 24);
+    expect(bucketsIn(quarter, "day")).toBe(90);
+    expect(bucketsIn(quarter, "week")).toBe(13);
+    // An unbounded range resolves to no points rather than Infinity, so the cap
+    // check cannot be skipped by asking for a range with no dates in it.
+    expect(bucketsIn({ label: "all time" }, "hour")).toBe(0);
   });
 });

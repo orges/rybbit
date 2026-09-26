@@ -29,7 +29,7 @@ import { runAnalyticsQuery, type QuerySpec } from "../utils/analyticsQuery.js";
 import { SessionReplayQueryService } from "../../../services/replay/sessionReplayQueryService.js";
 import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
 import type { Artifact, ResultStore } from "./presentation.js";
-import { defaultBucket, isTimePreset, previousRange, resolvePreset, timeStatementFor, type ResolvedRange } from "./time.js";
+import { bucketsIn, defaultBucket, isTimePreset, previousRange, resolvePreset, timeStatementFor, type ResolvedRange } from "./time.js";
 
 /**
  * The read-only analytics surface the analyst can reach.
@@ -172,6 +172,15 @@ const compactCell = (value: unknown) => (typeof value === "string" && value.leng
 
 const compactRows = (rows: ToolRow[]) => rows.map(row => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, compactCell(v)])));
 
+/**
+ * The most points a chart may carry.
+ *
+ * A point becomes an SVG node and a line of the artifact persisted with the
+ * message, so this bounds three things at once: what the browser draws, what
+ * crosses the wire, and what is stored per message forever.
+ */
+const MAX_CHART_POINTS = 2_000;
+
 const percentChange = (current: number, previous: number) =>
   previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : undefined;
 
@@ -252,7 +261,18 @@ const getTimeseries: AnalystTool = {
   },
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
-    const bucket = (args.bucket as "hour" | "day" | "week" | undefined) ?? defaultBucket(range);
+    const requested = args.bucket as "hour" | "day" | "week" | undefined;
+    // `defaultBucket` exists because "letting it pick hour for a quarter" produces
+    // thousands of points — but the model could always override it, and nothing
+    // stopped the override from being the wrong shape for the range. Every row
+    // becomes a point in a chart, then a persisted artifact.
+    const points = requested ? bucketsIn(range, requested) : 0;
+    if (requested && points > MAX_CHART_POINTS) {
+      throw new Error(
+        `Hourly over this range would be ${points.toLocaleString("en-US")} points, and a chart reads badly past ${MAX_CHART_POINTS}. Use a wider bucket — day gives ${bucketsIn(range, "day").toLocaleString("en-US")}, week gives ${bucketsIn(range, "week").toLocaleString("en-US")}.`
+      );
+    }
+    const bucket = requested ?? defaultBucket(range);
     const run = async (window: ResolvedRange) =>
       runAnalyticsQuery<{ time: string; sessions: number; pageviews: number }>({
         query: buildChartQuery(
