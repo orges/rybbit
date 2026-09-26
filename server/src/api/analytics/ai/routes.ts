@@ -11,7 +11,7 @@ import { OpenRouterError, type OpenRouterMessage } from "../../../lib/openrouter
 import { isRetryableAgentError, runAgent, type AgentEvent } from "./agent.js";
 import { ANALYST_EXAMPLE_PROMPTS } from "./prompt.js";
 import { buildProposalPrompt, PROPOSAL_TOOLS } from "./proposal.js";
-import { resolveToolRange, type ResolvedRange } from "./time.js";
+import { resolvePreset, resolveToolRange, type ResolvedRange } from "./time.js";
 import * as store from "./store.js";
 import { deriveTitle } from "./title.js";
 
@@ -94,14 +94,16 @@ export async function analystSuggest(
 
   try {
     const timezone = context.timeZone || "UTC";
-    const range: ResolvedRange = {
-      startDate: context.startDate,
-      endDate: context.endDate,
-      label: context.rangeLabel || (context.startDate ? `${context.startDate} to ${context.endDate}` : "the current range"),
-    };
     const [site] = await db.select({ name: sites.name }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
     const memories = (await store.listMemories(organizationId, siteId)).map(memory => memory.content);
 
+    const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+    // A proposal asks what exists on a Site, which the dashboard's current window
+    // cannot answer: on a quiet site "today" is empty, and the copilot then has
+    // nothing to propose from. A month is long enough for any real page or event
+    // to have shown up. Filters still apply — a proposal about a filtered view is
+    // still a valid one.
+    const window = resolvePreset("last_30_days", timezone);
     const result = await runAgent({
       history: [],
       question: ask?.trim() || `Suggest a ${kind} for ${site?.name ?? "this Site"}.`,
@@ -109,23 +111,19 @@ export async function analystSuggest(
         siteId,
         siteName: site?.name,
         timezone,
-        rangeLabel: range.label,
-        startDate: range.startDate,
-        endDate: range.endDate,
+        rangeLabel: window.label,
+        startDate: window.startDate,
+        endDate: window.endDate,
         filters: context.filters,
         memories,
-        today: DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd"),
-        systemPrompt: buildProposalPrompt(kind, ask, {
-          siteName: site?.name,
-          rangeLabel: range.label,
-          today: DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd"),
-        }),
+        today,
+        systemPrompt: buildProposalPrompt(kind, ask, { siteName: site?.name, rangeLabel: window.label, today }),
       },
       toolContext: {
         siteId,
         siteIds: [siteId],
         timezone,
-        defaultRange: resolveToolRange(undefined, range, timezone),
+        defaultRange: window,
         filters: context.filters,
         signal: abort.signal,
       },
