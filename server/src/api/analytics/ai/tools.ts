@@ -60,6 +60,16 @@ export interface ToolContext {
 /** The window a tool actually queried, for a result that can be re-queried later. */
 export type ToolRange = { startDate?: string; endDate?: string };
 
+/**
+ * Something for a person to review and save, returned by a proposal tool.
+ * `value` is exactly the body the product's own create endpoint accepts.
+ */
+export interface ToolProposal {
+  kind: string;
+  value: Record<string, unknown>;
+  reason: string;
+}
+
 export interface ToolOutput {
   /** What the model reads. Kept small: full rows live in the result store. */
   text: string;
@@ -69,6 +79,7 @@ export interface ToolOutput {
   artifact?: Artifact;
   /** Set when the rows are over a fixed window, so an artifact can ask for the same one. */
   range?: ToolRange;
+  proposal?: ToolProposal;
 }
 
 export interface AnalystTool {

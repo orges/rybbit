@@ -8,7 +8,7 @@ import {
 } from "../../../lib/openrouter.js";
 import { ANALYST_TOOL_SCHEMAS, buildSystemPrompt, type AnalystContext } from "./prompt.js";
 import { ALL_TOOLS, ResultStore, type Artifact } from "./presentation.js";
-import { toolFailure, type ToolContext } from "./tools.js";
+import { toolFailure, type AnalystTool, type ToolContext, type ToolProposal } from "./tools.js";
 import { unsupportedFigures } from "./verify.js";
 
 /**
@@ -61,6 +61,8 @@ export interface AgentResult {
   stopped: boolean;
   /** Figures in the answer that no tool result contained. */
   unverified: string[];
+  /** Set when a tool proposed something for a person to save. */
+  proposal?: ToolProposal;
   error?: string;
 }
 
@@ -71,14 +73,20 @@ export interface RunAgentOptions {
   toolContext: Omit<ToolContext, "results">;
   emit: (event: AgentEvent) => void;
   signal: AbortSignal;
+  /**
+   * The tools this run may call. Defaults to everything; a proposal run narrows
+   * it, so a page copilot can be handed a tool the chat has no use for.
+   */
+  tools?: Map<string, AnalystTool>;
 }
 
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const { emit, signal, toolContext, context } = options;
+  const tools = options.tools ?? ALL_TOOLS;
   const results = new ResultStore();
   const toolContextWithStore: ToolContext = { ...toolContext, results };
   const messages: OpenRouterMessage[] = [
-    { role: "system", content: buildSystemPrompt(context) },
+    { role: "system", content: context.systemPrompt ?? buildSystemPrompt(context) },
     ...options.history,
     { role: "user", content: options.question },
   ];
@@ -178,13 +186,13 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       // A replay is already in the trail, and one model that repeats itself five
       // times should not scroll the reader past five identical rows.
       if (!cached) emit({ type: "tool_start", id: call.id, name, input: args });
-      const tool = cached ? undefined : ALL_TOOLS.get(name);
+      const tool = cached ? undefined : tools.get(name);
       if (cached) {
         record.ok = cached.ok;
         record.output = `${cached.output}\n(Reused: this exact call already ran in this turn.)`;
       } else if (!tool) {
         record.ok = false;
-        record.output = `Unknown tool "${name}". Available tools: ${[...ALL_TOOLS.keys()].join(", ")}`;
+        record.output = `Unknown tool "${name}". Available tools: ${[...tools.keys()].join(", ")}`;
       } else {
         try {
           const output = await tool.run(args, toolContextWithStore);
@@ -209,6 +217,9 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
               emit({ type: "artifact", artifact: output.artifact });
             }
           }
+          // A proposal wins over any later one: the first thing the model
+          // settled on is the one the person is being asked to look at.
+          if (output.proposal && !result.proposal) result.proposal = output.proposal;
         } catch (error) {
           record.ok = false;
           record.output = toolFailure(name, error);

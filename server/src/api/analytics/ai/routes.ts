@@ -10,6 +10,7 @@ import { filterSchema } from "../utils/query-validation.js";
 import { OpenRouterError, type OpenRouterMessage } from "../../../lib/openrouter.js";
 import { isRetryableAgentError, runAgent, type AgentEvent } from "./agent.js";
 import { ANALYST_EXAMPLE_PROMPTS } from "./prompt.js";
+import { buildProposalPrompt, PROPOSAL_TOOLS } from "./proposal.js";
 import { resolveToolRange, type ResolvedRange } from "./time.js";
 import * as store from "./store.js";
 import { deriveTitle } from "./title.js";
@@ -44,10 +45,121 @@ const chatBodySchema = z.object({
     .default({ timeZone: "UTC", filters: [] }),
 });
 
+/**
+ * A copilot for a page: propose something, hand it back, save nothing.
+ *
+ * The reply is a value the page's own form can be filled with. There is no
+ * conversation, no transcript and no write — the person reviews it and presses
+ * save, which is the same button and the same validation they would have used.
+ */
+const suggestBody = z.object({
+  siteId: z.number().int().positive(),
+  kind: z.enum(["goal"]),
+  ask: z.string().trim().max(300).optional(),
+  context: z
+    .object({
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      rangeLabel: z.string().max(80).optional(),
+      timeZone: z.string().max(80).default("UTC"),
+      filters: z.array(filterSchema).max(20).default([]),
+    })
+    .default({ timeZone: "UTC", filters: [] }),
+});
+
 const conversationParams = z.object({
   organizationId: z.string().min(1),
   conversationId: z.string().uuid().optional(),
 });
+
+export async function analystSuggest(
+  request: FastifyRequest<{ Params: { organizationId: string }; Body: unknown }>,
+  reply: FastifyReply
+) {
+  const params = conversationParams.safeParse(request.params);
+  const body = suggestBody.safeParse(request.body);
+  if (!params.success || !body.success) {
+    return reply.status(400).send({ error: body.success ? "Invalid request" : body.error.errors[0]?.message });
+  }
+  const userId = request.user?.id;
+  if (!userId) return reply.status(403).send({ error: "A user session is required" });
+  const { organizationId } = params.data;
+  const { siteId, kind, ask, context } = body.data;
+  if (!(await authorize(request, organizationId, siteId))) {
+    return reply.status(403).send({ error: "No access to the requested site" });
+  }
+
+  const abort = new AbortController();
+  request.raw.on("aborted", () => abort.abort());
+
+  try {
+    const timezone = context.timeZone || "UTC";
+    const range: ResolvedRange = {
+      startDate: context.startDate,
+      endDate: context.endDate,
+      label: context.rangeLabel || (context.startDate ? `${context.startDate} to ${context.endDate}` : "the current range"),
+    };
+    const [site] = await db.select({ name: sites.name }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
+    const memories = (await store.listMemories(organizationId, siteId)).map(memory => memory.content);
+
+    const result = await runAgent({
+      history: [],
+      question: ask?.trim() || `Suggest a goal for ${site?.name ?? "this Site"}.`,
+      context: {
+        siteId,
+        siteName: site?.name,
+        timezone,
+        rangeLabel: range.label,
+        startDate: range.startDate,
+        endDate: range.endDate,
+        filters: context.filters,
+        memories,
+        today: DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd"),
+        systemPrompt: buildProposalPrompt(kind, ask, {
+          siteName: site?.name,
+          rangeLabel: range.label,
+          today: DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd"),
+        }),
+      },
+      toolContext: {
+        siteId,
+        siteIds: [siteId],
+        timezone,
+        defaultRange: resolveToolRange(undefined, range, timezone),
+        filters: context.filters,
+        signal: abort.signal,
+      },
+      tools: PROPOSAL_TOOLS,
+      emit: () => {},
+      signal: abort.signal,
+    });
+
+    if (result.error) return reply.status(502).send({ error: "The suggestion could not be made" });
+    if (!result.proposal) {
+      // The model answered without proposing. Its own words are the honest
+      // thing to show, rather than an empty form.
+      return reply.send({ reason: result.text.slice(0, 600), proposal: null });
+    }
+    return reply.send({
+      proposal: result.proposal,
+      reason: result.proposal.reason,
+      // What it looked at, so the person can judge the proposal rather than
+      // trusting it.
+      looked: result.toolCalls
+        .filter(call => call.name !== "propose_goal" && call.ok)
+        .map(call => ({ name: call.name, input: call.input })),
+    });
+  } catch (error) {
+    request.log.error({ err: error }, "Analyst suggestion failed");
+    if (abort.signal.aborted) return reply;
+    return reply
+      .status(error instanceof OpenRouterError && error.code === "missing_api_key" ? 503 : 502)
+      .send({ error: "The suggestion could not be made" });
+  } finally {
+    request.raw.off("aborted", () => abort.abort());
+  }
+}
+
 const siteQuery = z.object({ siteId: z.coerce.number().int().positive(), search: z.string().max(200).optional() });
 
 /**

@@ -58,7 +58,14 @@ export { getErrorBucketed } from "./getErrorBucketed.js";
 export { getErrorEvents } from "./getErrorEvents.js";
 export { getErrorNames } from "./getErrorNames.js";
 export { generateCustomQuery } from "./generateCustomQuery.js";
-export { analystChat, handleConversations, handleFeedback, handleMemories, ANALYST_EXAMPLE_PROMPTS } from "./ai/routes.js";
+export {
+  analystChat,
+  analystSuggest,
+  handleConversations,
+  handleFeedback,
+  handleMemories,
+  ANALYST_EXAMPLE_PROMPTS,
+} from "./ai/routes.js";
 export { getJourneys } from "./getJourneys.js";
 export { getLiveUsercount } from "./getLiveUsercount.js";
 export { getMetric } from "./getMetric.js";

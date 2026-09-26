@@ -23,6 +23,7 @@ import {
 } from "./api/admin/index.js";
 import {
   analystChat,
+  analystSuggest,
   handleConversations,
   handleFeedback,
   handleMemories,
@@ -519,6 +520,11 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     "/organizations/:organizationId/analytics/chat",
     withRateLimit(orgSqlRead, generateQueryRateLimit),
     analystChat
+  );
+  fastify.post(
+    "/organizations/:organizationId/analytics/suggest",
+    withRateLimit(orgSqlRead, generateQueryRateLimit),
+    analystSuggest
   );
   fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleConversations);
   fastify.get(

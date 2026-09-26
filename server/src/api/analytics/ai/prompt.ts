@@ -35,6 +35,11 @@ export interface AnalystContext {
   stat?: string;
   memories?: string[];
   today: string;
+  /**
+   * Replaces the analyst prompt for a run that is doing something else — a page
+   * copilot proposing a goal, say. Absent means a normal answering turn.
+   */
+  systemPrompt?: string;
 }
 
 export function buildSystemPrompt(context: AnalystContext) {
