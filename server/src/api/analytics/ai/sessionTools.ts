@@ -2,8 +2,19 @@ import { z } from "zod";
 import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
 import { runAnalyticsQuery } from "../utils/analyticsQuery.js";
 import { digestForModel, digestSession, type SessionDigest, type TimelineRow } from "./sessionDigest.js";
-import { resolveToolRange, timeStatementFor } from "./time.js";
+import { isTimePreset, resolvePreset, timeStatementFor } from "./time.js";
 import type { AnalystTool, ToolContext } from "./tools.js";
+
+/** Matches the other tools: a session is read in a range, chosen server-side. */
+const timeShape = {
+  type: "object",
+  description: "When to look for the session. A session id carries no date, so without this the dashboard's current range is used and older sessions are unreachable. Defaults to the last 90 days.",
+  properties: {
+    preset: { type: "string", enum: ["today", "yesterday", "last_7_days", "last_14_days", "last_30_days", "last_90_days", "this_month", "last_month", "all_time"] },
+    start_date: { type: "string", description: "Inclusive start date, YYYY-MM-DD" },
+    end_date: { type: "string", description: "Inclusive end date, YYYY-MM-DD" },
+  },
+} as const;
 
 /**
  * Reading what visitors actually did.
@@ -64,8 +75,41 @@ function toTimelineRow(item: unknown): TimelineRow {
   };
 }
 
-async function digestOne(ctx: ToolContext, sessionId: string): Promise<SessionDigest> {
-  const range = resolveToolRange(undefined, ctx.defaultRange, ctx.timezone);
+/**
+ * The window to read a session in.
+ *
+ * A session id carries no date of its own, so without a `time` argument this can
+ * only ever read whatever range the dashboard is currently on — and the model has
+ * no way to widen it, which makes every older session unreachable. Sessions are
+ * also older than the range people are usually looking at, so the fallback is the
+ * widest range rather than the dashboard's: being unable to see something is a
+ * worse failure than reading a window that is too wide.
+ */
+export function windowFor(args: Record<string, unknown>, ctx: ToolContext) {
+  const requested = z
+    .object({
+      preset: z.string().optional(),
+      start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .safeParse(args.time);
+
+  if (requested.success && requested.data) {
+    const { preset, start_date, end_date } = requested.data;
+    if (start_date || end_date) {
+      if (!start_date || !end_date) throw new Error("Give both start_date and end_date, or use a preset");
+      return { startDate: start_date, endDate: end_date, label: `${start_date} to ${end_date}` };
+    }
+    if (preset) {
+      if (!isTimePreset(preset)) throw new Error(`Unknown time preset "${preset}"`);
+      return resolvePreset(preset, ctx.timezone);
+    }
+  }
+  return ctx.defaultRange.startDate ? ctx.defaultRange : resolvePreset("last_90_days", ctx.timezone);
+}
+
+async function digestOne(ctx: ToolContext, sessionId: string, args: Record<string, unknown>): Promise<SessionDigest> {
+  const range = windowFor(args, ctx);
   const rows = await runAnalyticsQuery<Record<string, unknown>>({
     query: buildSessionTimelineQuery(timeStatementFor(range, ctx.timezone)),
     params: { siteId: ctx.siteId, sessionId, limit: MAX_TIMELINE_ROWS },
@@ -98,6 +142,7 @@ const getSessionTimeline: AnalystTool = {
     type: "object",
     properties: {
       session_id: { type: "string", description: "The session to read, as returned by search_replays or get_error_events" },
+      time: timeShape,
     },
     required: ["session_id"],
   },
@@ -106,9 +151,16 @@ const getSessionTimeline: AnalystTool = {
     const sessionId = sessionIdSchema.safeParse(String(args.session_id ?? "").trim());
     if (!sessionId.success) throw new Error("session_id is required");
 
-    const digest = await digestOne(ctx, sessionId.data);
+    const digest = await digestOne(ctx, sessionId.data, args);
     if (!digest.steps.length && !digest.clicks.length) {
-      return { text: JSON.stringify({ session_id: sessionId.data, found: false, note: "No interaction events for that session in this range." }) };
+      return {
+        text: JSON.stringify({
+          session_id: sessionId.data,
+          found: false,
+          searched: windowFor(args, ctx).label,
+          note: "No interaction events for that session in that window. A session id carries no date, so widen the range with `time` — the session may be older than the dashboard's current range.",
+        }),
+      };
     }
     // No rows on purpose: a digest is not chartable, and the answer is the prose.
     return { text: JSON.stringify(digestForModel(digest, sessionId.data)) };
@@ -129,6 +181,7 @@ const analyseSessions: AnalystTool = {
         items: { type: "string" },
         description: "Sessions to compare, as returned by search_replays or get_error_events",
       },
+      time: timeShape,
     },
     required: ["session_ids"],
   },
@@ -138,7 +191,7 @@ const analyseSessions: AnalystTool = {
     if (!parsed.success) throw new Error(`Give between 2 and ${MAX_SESSIONS} session ids.`);
 
     const digests: Array<{ sessionId: string; digest: SessionDigest }> = [];
-    for (const sessionId of parsed.data) digests.push({ sessionId, digest: await digestOne(ctx, sessionId) });
+    for (const sessionId of parsed.data) digests.push({ sessionId, digest: await digestOne(ctx, sessionId, args) });
     const found = digests.filter(entry => entry.digest.steps.length || entry.digest.clicks.length);
     if (!found.length) {
       return { text: JSON.stringify({ sessions_given: parsed.data.length, with_events: 0, note: "None of those sessions have interaction events in this range." }) };
