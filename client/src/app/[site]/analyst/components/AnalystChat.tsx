@@ -16,6 +16,7 @@ import { useStore, useTimezone } from "@/lib/store";
 import { ChatComposer } from "./ChatComposer";
 import { ConversationRail } from "./ConversationRail";
 import { MessageItem } from "./MessageItem";
+import { ProjectMemory } from "./ProjectMemory";
 import { useChatStream } from "./useChatStream";
 
 /**
@@ -189,6 +190,7 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             setRailOpen(false);
             setRailCollapsed(value => !value);
           }}
+          footer={<ProjectMemory organizationId={organizationId} siteId={siteId} />}
           onSelect={id => {
             setRailOpen(false);
             void loadConversation(id);

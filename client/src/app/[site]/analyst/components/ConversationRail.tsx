@@ -2,7 +2,7 @@
 
 import { MessageSquarePlus, Pencil, Trash2, X } from "lucide-react";
 import { useExtracted } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ConversationSummary } from "@/api/analyst/endpoints/analyst";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ export function ConversationRail({
   onRename,
   collapsed,
   onToggle,
+  footer,
   loading,
   className,
   search,
@@ -48,6 +49,8 @@ export function ConversationRail({
   onRename: (id: string, title: string) => void;
   collapsed: boolean;
   onToggle: () => void;
+  /** Pinned below the thread list — the rail does not know what this is. */
+  footer?: ReactNode;
   loading?: boolean;
   className?: string;
   search: string;
@@ -181,6 +184,7 @@ export function ConversationRail({
           ))}
         </ul>
       </nav>
+      {footer}
     </aside>
   );
 }
