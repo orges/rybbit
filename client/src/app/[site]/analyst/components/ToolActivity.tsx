@@ -5,6 +5,7 @@ import { useExtracted } from "next-intl";
 import { useState } from "react";
 import type { ToolCallView } from "@/api/analyst/endpoints/analyst";
 import { cn } from "@/lib/utils";
+import { describeInput } from "../../components/describeToolInput";
 
 /**
  * What the analyst is doing right now.
@@ -36,53 +37,6 @@ const TOOL_LABELS: Record<string, string> = {
   show_funnel: "Draw the funnel",
   suggest_followups: "Suggest follow-ups",
 };
-
-/** Arguments the reader never needs to see on the row. */
-const HIDDEN_ARGS = new Set(["result_id", "title", "sql", "error_message", "options"]);
-
-/**
- * What the tool was asked, in words rather than keys.
- *
- * The row used to lead with the tool's own output, which is the model's JSON:
- * "columns: cohort_period, period_difference, cohort_size…". Those column names
- * are plumbing for the model — the reader asked for a breakdown by pathname, so
- * that is what the row should say. The raw output is still there when the row is
- * opened.
- */
-export function describeInput(input: Record<string, unknown> | undefined): string {
-  if (!input) return "";
-  const parts: string[] = [];
-  for (const [key, value] of Object.entries(input)) {
-    if (HIDDEN_ARGS.has(key) || value === undefined || value === null || value === "") continue;
-    if (key === "time" || key === "range") {
-      const range = describeRange(value);
-      if (range) parts.push(range);
-      continue;
-    }
-    if (Array.isArray(value)) {
-      if (!value.length) continue;
-      parts.push(key === "steps" ? `${value.length} steps` : `${key}: ${value.map(String).join(", ")}`);
-      continue;
-    }
-    if (typeof value === "object") continue;
-    if (key === "dimension") parts.push(`by ${String(value)}`);
-    else if (key === "limit") parts.push(`top ${String(value)}`);
-    else if (key === "mode") parts.push(String(value) === "week" ? "weekly" : "daily");
-    else if (key === "range_days") parts.push(`last ${String(value)} days`);
-    else parts.push(`${key}: ${String(value)}`);
-    if (parts.length >= 3) break;
-  }
-  return parts.join(" · ");
-}
-
-function describeRange(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (!value || typeof value !== "object") return "";
-  const range = value as { preset?: string; start_date?: string; end_date?: string };
-  if (range.preset) return String(range.preset).replace(/_/g, " ");
-  if (range.start_date && range.end_date) return `${range.start_date} to ${range.end_date}`;
-  return "";
-}
 
 function ToolRow({ call }: { call: ToolCallView }) {
   const [open, setOpen] = useState(false);

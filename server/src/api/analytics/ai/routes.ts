@@ -48,14 +48,28 @@ const chatBodySchema = z.object({
 /**
  * A copilot for a page: propose something, hand it back, save nothing.
  *
- * The reply is a value the page's own form can be filled with. There is no
- * conversation, no transcript and no write — the person reviews it and presses
- * save, which is the same button and the same validation they would have used.
+ * The reply is a value the page's own form can be filled with. Nothing is
+ * written — the person reviews it and presses save, which is the same button and
+ * the same validation they would have used.
+ *
+ * It is a conversation, not a button: the page sends the proposal being revised
+ * along with the instruction for the next one, so "make it three steps" means
+ * something. That context rides along with the request rather than being stored —
+ * a copilot thread ends with the page, and there is no transcript to keep.
  */
 const suggestBody = z.object({
   siteId: z.number().int().positive(),
   kind: z.enum(["goal", "funnel", "dashboard"]),
   ask: z.string().trim().max(300).optional(),
+  /** The proposal being revised, so an instruction about it can act on it. */
+  previous: z
+    .object({
+      value: z.record(z.string(), z.unknown()),
+      reason: z.string().max(400).default(""),
+      /** The instruction that produced it. */
+      ask: z.string().max(300).optional(),
+    })
+    .optional(),
   context: z
     .object({
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -63,8 +77,13 @@ const suggestBody = z.object({
       rangeLabel: z.string().max(80).optional(),
       timeZone: z.string().max(80).default("UTC"),
       filters: z.array(filterSchema).max(20).default([]),
+      /**
+       * What the page already lists. A duplicate reads as a useless suggestion,
+       * and the page already has the list, so it is sent rather than queried.
+       */
+      existing: z.array(z.string().max(120)).max(50).default([]),
     })
-    .default({ timeZone: "UTC", filters: [] }),
+    .default({ timeZone: "UTC", filters: [], existing: [] }),
 });
 
 const conversationParams = z.object({
@@ -84,7 +103,7 @@ export async function analystSuggest(
   const userId = request.user?.id;
   if (!userId) return reply.status(403).send({ error: "A user session is required" });
   const { organizationId } = params.data;
-  const { siteId, kind, ask, context } = body.data;
+  const { siteId, kind, ask, previous, context } = body.data;
   if (!(await authorize(request, organizationId, siteId))) {
     return reply.status(403).send({ error: "No access to the requested site" });
   }
@@ -104,9 +123,19 @@ export async function analystSuggest(
     // to have shown up. Filters still apply — a proposal about a filtered view is
     // still a valid one.
     const window = resolvePreset("last_30_days", timezone);
+    // The proposal being revised, as the model's own prior turn, so an
+    // instruction like "make it three steps" has something to act on.
+    const history = previous
+      ? ([
+          { role: "user" as const, content: previous.ask?.trim() || `Suggest a ${kind}.` },
+          { role: "assistant" as const, content: JSON.stringify({ proposal: previous.value, reason: previous.reason }) },
+        ] satisfies OpenRouterMessage[])
+      : [];
     const result = await runAgent({
-      history: [],
-      question: ask?.trim() || `Suggest a ${kind} for ${site?.name ?? "this Site"}.`,
+      history,
+      question:
+        ask?.trim() ||
+        (previous ? `Revise the ${kind} you just proposed.` : `Suggest a ${kind} for ${site?.name ?? "this Site"}.`),
       context: {
         siteId,
         siteName: site?.name,
@@ -117,7 +146,13 @@ export async function analystSuggest(
         filters: context.filters,
         memories,
         today,
-        systemPrompt: buildProposalPrompt(kind, ask, { siteName: site?.name, rangeLabel: window.label, today }),
+        systemPrompt: buildProposalPrompt(kind, ask, {
+          siteName: site?.name,
+          rangeLabel: window.label,
+          today,
+          revising: Boolean(previous),
+          existing: context.existing,
+        }),
       },
       toolContext: {
         siteId,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeInput } from "./ToolActivity";
+import { describeInput } from "../../components/describeToolInput";
 
 describe("describeInput", () => {
   it("says what the reader asked for, not the model's column names", () => {
