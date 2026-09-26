@@ -309,7 +309,11 @@ export function AnalystChat({ siteId, organizationId }: { siteId: number; organi
             onSubmit={submit}
             onStop={stop}
             streaming={streaming}
-            disabled={!organizationId}
+            // While the thread on screen is answering, the send button is replaced
+            // by Stop, so the field itself stays typeable — but a second question
+            // in the same thread would be refused silently, which reads as a lost
+            // question. Switching threads frees it, which is the point.
+            disabled={!organizationId || streaming}
             editing={editing !== null}
             onCancelEdit={() => {
               setEditing(null);
