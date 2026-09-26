@@ -61,6 +61,8 @@ export interface DigestForm {
 
 export interface DigestError {
   message: string;
+  /** "TypeError", "unhandledrejection" — the error's type, not its text. */
+  kind: string;
   at: number;
 }
 
@@ -122,6 +124,11 @@ const PROPS_ALLOWED: Record<string, string[]> = {
   // `text` here is what the visitor copied, so it is deliberately not read.
   copy: ["textLength", "sourceElement"],
   outbound: ["url", "domain"],
+  // The message is the useful half; `stack` is not read, and that is deliberate
+  // rather than an oversight — a stack names the visitor's own browser extensions
+  // and their installed software, which is neither useful to an analyst nor the
+  // analyst's business.
+  error: ["message", "type"],
   custom_event: [],
 };
 
@@ -239,9 +246,11 @@ export function digestSession(rows: TimelineRow[], opts: { endTimestamp?: number
   }
 
   // --- errors and custom events ---
-  const errors = ordered
-    .filter(row => row.type === "error")
-    .map(row => ({ message: text(row.event_name, MAX_ERROR) || "error", at: at(row.timestamp) }));
+  const errors = ordered.filter(row => row.type === "error").map(row => {
+    const detail = str(row.props, "message", MAX_ERROR);
+    const kind = str(row.props, "type", 40);
+    return { message: detail || text(row.event_name, MAX_ERROR) || "error", kind, at: at(row.timestamp) };
+  });
 
   const eventCounts = new Map<string, number>();
   for (const row of ordered.filter(row => row.type === "custom_event")) {
@@ -297,7 +306,7 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     dead_clicks: digest.deadClicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
     fields_touched: digest.fields.map(field => `${field.name} (${field.kind}) ×${field.count}`),
     forms: digest.forms.map(form => `${form.name}: ${form.submitted ? "submitted" : "NOT submitted"}, fields ${form.fields.join(", ") || "none"}`),
-    errors: digest.errors.map(error => `${error.message} at ${error.at}s`),
+    errors: digest.errors.map(error => `${error.message}${error.kind ? ` (${error.kind})` : ""} at ${error.at}s`),
     custom_events: digest.customEvents.map(event => `${event.name} ×${event.count}`),
     outbound: digest.outbound,
     truncated: digest.truncated,
