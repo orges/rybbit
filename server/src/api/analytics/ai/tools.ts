@@ -282,7 +282,17 @@ const getTimeseries: AnalystTool = {
         params: { siteId: ctx.siteId, timeZone: ctx.timezone },
       });
     const rows = await run(range);
-    const result: Record<string, unknown> = { range: range.label, bucket, points: rows.length };
+    // The range that was asked for, and the span the rows actually cover, are not
+    // the same thing: a site with two weeks of history answers a 90-day question
+    // with two weeks of points. Reporting only the requested range is how an
+    // answer ends up claiming a period it has no data for.
+    const stamps = rows.map(row => String(row.time ?? "")).filter(Boolean).sort();
+    const result: Record<string, unknown> = {
+      range: range.label,
+      bucket,
+      points: rows.length,
+      ...(stamps.length ? { covers: { from: stamps[0], to: stamps[stamps.length - 1] } } : {}),
+    };
     if (args.compare) {
       const previous = previousRange(range, ctx.timezone);
       if (previous) {
