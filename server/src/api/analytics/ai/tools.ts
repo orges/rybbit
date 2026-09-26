@@ -833,6 +833,19 @@ const searchReplays: AnalystTool = {
     // id at all, which is the one field the model needs to read a session. It
     // looked like a search that found nothing it could use.
     const rows = sessions as unknown as ToolRow[];
+    if (!rows.length && filters.length) {
+      // An empty result with a filter is far more often a value that does not
+      // match than a Site with no such sessions, and the second reading is a
+      // confident wrong answer.
+      return {
+        text: JSON.stringify({
+          range: range.label,
+          count: 0,
+          filtered_by: filters,
+          note: "No sessions matched that filter. Filter values match exactly, including capitalisation — a Site's device_type values are usually \"Mobile\" and \"Desktop\", not lowercase. Call get_breakdown on that dimension to see the exact values before concluding there were none.",
+        }),
+      };
+    }
     return {
       text: JSON.stringify({
         range: range.label,
