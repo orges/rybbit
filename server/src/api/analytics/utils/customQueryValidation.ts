@@ -565,9 +565,11 @@ export function sanitizeClickhouseError(error: unknown): string {
   // The numeric code arrives on the error object; the "Code: NN." prefix only
   // appears in the CLI's plain-text output. Reading the message alone meant every
   // real failure collapsed to "Failed to run query" — including codes that are on
-  // the list below and are exactly what the query author needs to see.
+  // the list below and are exactly what the query author needs to see. The client
+  // sets it as a *string*, so a numeric-only check still misses it.
   const onError = (error as { code?: unknown } | null)?.code;
-  const code = typeof onError === "number" ? onError : Number(/^Code: (\d+)\./.exec(raw)?.[1]);
+  const fromError = onError === undefined || onError === null || onError === "" ? Number.NaN : Number(onError);
+  const code = Number.isFinite(fromError) ? fromError : Number(/^Code: (\d+)\./.exec(raw)?.[1]);
   if (code === 497 || /Not enough privileges/i.test(raw)) {
     return "Query references data outside scoped_events";
   }

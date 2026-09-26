@@ -175,6 +175,26 @@ describe("sanitizeClickhouseError", () => {
     );
   });
 
+  // The shape @clickhouse/client actually throws: the code is on the error object
+  // as a *string* and the message carries no "Code: NN." prefix. A test written
+  // against the CLI's text format passes while the real error stays unreadable.
+  it("reads the code off the error object when the client sets it as a string", () => {
+    const error = Object.assign(new Error("Unknown expression identifier `no_such_column` in scope SELECT no_such_column FROM scoped_events. "), {
+      code: "47",
+    });
+    expect(sanitizeClickhouseError(error)).toContain("Unknown expression identifier");
+  });
+
+  it("reads the code off the error object when it is a number", () => {
+    const error = Object.assign(new Error("Syntax error: failed at position 1"), { code: 62 });
+    expect(sanitizeClickhouseError(error)).toContain("Syntax error");
+  });
+
+  it("still hides an error whose code is not on the safe list", () => {
+    const error = Object.assign(new Error("host clickhouse-node-3.internal: connection refused"), { code: 210 });
+    expect(sanitizeClickhouseError(error)).toBe("Query failed (ClickHouse error 210)");
+  });
+
   it("maps privilege errors to a generic message", () => {
     expect(
       sanitizeClickhouseError(new Error("Code: 497. DB::Exception: rybbit_query: Not enough privileges. (ACCESS_DENIED)"))
