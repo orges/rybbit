@@ -5,6 +5,7 @@ import { useExtracted } from "next-intl";
 import { useState, type ReactNode } from "react";
 import type { ConversationSummary } from "@/api/analyst/endpoints/analyst";
 import { Button } from "@/components/ui/button";
+import { ConfirmationModal } from "@/components/ConfirmationModal";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,7 @@ export function ConversationRail({
 }) {
   const t = useExtracted();
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   if (collapsed) {
@@ -168,15 +170,27 @@ export function ConversationRail({
                     >
                       <Pencil className="size-3" />
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="smIcon"
-                      aria-label={t("Delete chat")}
-                      onClick={() => onDelete(conversation.id)}
+                    <ConfirmationModal
+                      title={t("Delete chat")}
+                      description={t(
+                        'Delete "{title}"? This removes the whole thread and cannot be undone.',
+                        { title: conversation.title }
+                      )}
+                      isOpen={deleting === conversation.id}
+                      setIsOpen={open => setDeleting(open ? conversation.id : null)}
+                      onConfirm={() => onDelete(conversation.id)}
+                      primaryAction={{ children: t("Delete"), variant: "destructive" }}
                     >
-                      <Trash2 className="size-3" />
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="smIcon"
+                        aria-label={t("Delete chat")}
+                        onClick={() => setDeleting(conversation.id)}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </ConfirmationModal>
                   </div>
                 </div>
               )}
