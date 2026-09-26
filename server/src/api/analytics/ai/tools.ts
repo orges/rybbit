@@ -9,6 +9,7 @@ import { buildFunnelQuery } from "../funnels/getFunnel.js";
 import { buildGoalsConversionsQuery, buildGoalsTotalSessionsQuery } from "../goals/getGoals.js";
 import { buildGoalTimeSeriesQuery } from "../goals/getGoalTimeSeries.js";
 import { buildJourneysQuery } from "../getJourneys.js";
+import { FILTER_PARAMETERS, FILTER_TYPES, validateFilters } from "../utils/query-validation.js";
 import { buildMetricQuery } from "../getMetric.js";
 import { buildPerformanceByDimensionQuery } from "../performance/getPerformanceByDimension.js";
 import { buildPerformanceOverviewQuery } from "../performance/getPerformanceOverview.js";
@@ -776,10 +777,33 @@ const getJourneys: AnalystTool = {
   },
 };
 
+/**
+ * Filters in the shape the dashboard already uses.
+ *
+ * Not a new vocabulary: the parameter names and comparison types are the ones the
+ * filter bar offers, and the values go through the same `validateFilters` the
+ * dashboard does, so a filter the model invents is refused with a sentence it can
+ * correct rather than reaching a query.
+ */
+const filterArgsShape = {
+  type: "array",
+  description:
+    "Optional filters, in the dashboard's own shape. Use them to find sessions that did something — a page they visited, an event they fired, a country, device or browser. To find sessions that visited a page, filter on `pathname`.",
+  items: {
+    type: "object",
+    properties: {
+      parameter: { type: "string", enum: FILTER_PARAMETERS },
+      type: { type: "string", enum: FILTER_TYPES },
+      value: { type: "array", items: { type: ["string", "number"] }, description: "The value to match" },
+    },
+    required: ["parameter", "type", "value"],
+  },
+} as const;
+
 const searchReplays: AnalystTool = {
   name: "search_replays",
   description:
-    "Find recorded sessions matching filters, with their duration, entry page, country, browser and device. Returns session IDs the user can open in Replay.",
+    "Find sessions, with their duration, entry page, country, browser and device, returning session ids you can then read with get_session_timeline or compare with analyse_sessions. Filter by what the visitor did — the page they visited, the event they fired, a device or country — as well as by duration or user.",
   parameters: {
     type: "object",
     properties: {
@@ -787,13 +811,19 @@ const searchReplays: AnalystTool = {
       limit: { type: "integer", minimum: 1, maximum: 20 },
       min_duration: { type: "integer", minimum: 0, description: "Only sessions at least this many seconds long" },
       user_id: { type: "string" },
+      filters: filterArgsShape,
     },
   },
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
+    // The dashboard's own filters still apply, so a search means the same thing as
+    // the page it was asked from; the model's own are added to them.
+    const requested = validateFilters(JSON.stringify(args.filters ?? []));
+    const filters = [...ctx.filters, ...requested];
     const sessions = await new SessionReplayQueryService().getSessionReplayList(ctx.siteId, {
       ...baseParams(ctx, range),
-      limit: Math.min(Number(args.limit ?? 10), 20),
+      ...(filters.length ? { filters: JSON.stringify(filters) } : {}),
+      limit: Math.min(Number(args.limit ?? 20), 20),
       ...(args.min_duration ? { minDuration: Number(args.min_duration) } : {}),
       ...(args.user_id ? { userId: String(args.user_id) } : {}),
     });

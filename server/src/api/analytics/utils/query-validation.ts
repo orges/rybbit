@@ -61,6 +61,12 @@ const baseFilterParamSchema = z.enum([
   "tag",
 ]);
 
+/** The parameter names a filter may use, for a tool schema that has to list them. */
+export const FILTER_PARAMETERS = baseFilterParamSchema.options;
+
+/** The comparison types a filter may use. */
+export const FILTER_TYPES = filterTypeSchema.options;
+
 export const filterParamSchema: z.ZodType<FilterParameter> = z.union([
   baseFilterParamSchema,
   z.string().regex(/^feature_flag:[A-Za-z][A-Za-z0-9_.:-]{0,99}$/),

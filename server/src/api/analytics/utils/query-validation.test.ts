@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterParamSchema, validateFilters, validateHttpTimeParams } from "./query-validation.js";
+import { FILTER_PARAMETERS, FILTER_TYPES, filterParamSchema, validateFilters, validateHttpTimeParams } from "./query-validation.js";
 
 // =============================================================================
 // validateHttpTimeParams
@@ -270,5 +270,25 @@ describe("filterParamSchema", () => {
       expect(filterParamSchema.safeParse("feature_flag:x'; DROP").success).toBe(false);
       expect(filterParamSchema.safeParse("feature_flag:flag\n").success).toBe(false);
     });
+  });
+});
+
+describe("the filter vocabulary a model is given", () => {
+  it("lists the parameters and comparison types the filter bar offers", () => {
+    // The analyst's session search hands the model these as its schema, so they
+    // have to be the dashboard's own and not a parallel list that drifts.
+    expect(FILTER_PARAMETERS).toContain("pathname");
+    expect(FILTER_PARAMETERS).toContain("event_name");
+    expect(FILTER_PARAMETERS).toContain("entry_page");
+    expect(FILTER_TYPES).toContain("equals");
+    expect(FILTER_TYPES).toContain("contains");
+    // regex is a real filter type here, bounded and RE2-checked at query time.
+    expect(FILTER_TYPES).toContain("regex");
+  });
+
+  it("refuses a filter it would not accept from the dashboard either", () => {
+    expect(() => validateFilters(JSON.stringify([{ parameter: "nope", type: "equals", value: ["x"] }]))).toThrow();
+    expect(() => validateFilters(JSON.stringify([{ parameter: "pathname", type: "sounds_like", value: ["x"] }]))).toThrow();
+    expect(() => validateFilters(JSON.stringify([{ parameter: "pathname", type: "equals" }]))).toThrow();
   });
 });

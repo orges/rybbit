@@ -75,6 +75,8 @@ The trade is that the analysis happens wherever the model runs. If that matters 
 
 Ask can summarise a session as structure: pages in order with time on each, clicks grouped by control, which form fields were touched, whether the form was submitted, errors, outbound links. Give it a session id and it will read one; give it several and it reports only what they share — the page where they stopped, controls that led nowhere, forms touched but never submitted, errors that repeat.
 
+It finds them the way the Sessions page does, so *"which sessions visited /pricing and then left"* is a question it can answer before it reads anything. Filters use the same parameters the filter bar offers — page, event, country, device, browser and the rest.
+
 This is the interaction events your tracker already records, reduced to a summary. It is **not** session replay: no recording is read, no page content is, and nothing a visitor typed is available to it — the tracker never records it, so Ask cannot report what was in a field and will say so if asked.
 
 It follows the **session replay** setting in Site Settings, so it is available on a Site only where you already keep session recordings. It costs no extra storage and does not change what is recorded.
