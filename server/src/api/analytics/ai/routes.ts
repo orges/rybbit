@@ -120,7 +120,7 @@ export async function analystSuggest(
 
   try {
     const timezone = context.timeZone || "UTC";
-    const [site] = await db.select({ name: sites.name }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
+    const [site] = await db.select({ name: sites.name, sessionReplay: sites.sessionReplay }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
     const memories = (await store.listMemories(organizationId, siteId)).map(memory => memory.content);
 
     const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
@@ -168,6 +168,8 @@ export async function analystSuggest(
         defaultRange: window,
         filters: context.filters,
         existingConditions: context.existing.map(entry => entry.condition),
+        // A copilot proposes a goal, funnel or dashboard; it never reads sessions.
+        sessionReplay: false,
         signal: abort.signal,
       },
       tools: PROPOSAL_TOOLS,
@@ -291,7 +293,11 @@ export async function analystChat(
       endDate: context.endDate,
       label: context.rangeLabel || (context.startDate ? `${context.startDate} to ${context.endDate}` : "the current range"),
     };
-    const [site] = await db.select({ name: sites.name }).from(sites).where(eq(sites.siteId, siteId)).limit(1);
+    const [site] = await db
+      .select({ name: sites.name, sessionReplay: sites.sessionReplay })
+      .from(sites)
+      .where(eq(sites.siteId, siteId))
+      .limit(1);
     const memories = (await store.listMemories(organizationId, siteId)).map(memory => memory.content);
     let turn: { id: string } | undefined;
 
@@ -337,6 +343,7 @@ export async function analystChat(
         timezone,
         defaultRange: resolveToolRange(undefined, range, timezone),
         filters: context.filters,
+        sessionReplay: site?.sessionReplay === true,
         signal: abort.signal,
       },
       emit: send,

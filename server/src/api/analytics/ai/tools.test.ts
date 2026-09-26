@@ -19,6 +19,7 @@ const context = (results: ResultStore) =>
     defaultRange: resolvePreset("last_7_days", "UTC"),
     filters: [],
     results,
+    sessionReplay: false,
     signal: new AbortController().signal,
   }) as ToolContext;
 

@@ -28,6 +28,7 @@ import { sanitizeClickhouseError } from "../utils/customQueryValidation.js";
 import { runAnalyticsQuery, type QuerySpec } from "../utils/analyticsQuery.js";
 import { SessionReplayQueryService } from "../../../services/replay/sessionReplayQueryService.js";
 import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
+import { SESSION_TOOLS } from "./sessionTools.js";
 import type { Artifact, ResultStore } from "./presentation.js";
 import { bucketsIn, defaultBucket, isTimePreset, previousRange, resolvePreset, timeStatementFor, type ResolvedRange } from "./time.js";
 
@@ -59,6 +60,13 @@ export interface ToolContext {
    * Sent by the page, which already has the list.
    */
   existingConditions?: string[];
+  /**
+   * Whether this Site records session replay. The session tools read what a
+   * visitor did, so they follow the setting that already governs whether that is
+   * kept at all — required rather than optional so a caller cannot leave it
+   * undefined and have the tools decide that means yes.
+   */
+  sessionReplay: boolean;
   signal: AbortSignal;
 }
 
@@ -847,6 +855,7 @@ const runSql: AnalystTool = {
 const compactRow = (row: ToolRow) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, compactCell(value)]));
 
 export const ANALYST_TOOLS: AnalystTool[] = [
+  ...SESSION_TOOLS,
   getOverview,
   getTimeseries,
   getBreakdown,
