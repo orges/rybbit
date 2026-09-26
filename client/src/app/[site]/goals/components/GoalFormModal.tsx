@@ -174,6 +174,12 @@ function PropertyFilterSection({
 interface GoalFormModalProps {
   siteId: number;
   goal?: Goal; // Optional goal for editing mode
+  /**
+   * Seeds a new goal's form, used by the copilot: it proposes a value and the
+   * person reviews it in the same form they would fill in by hand. Ignored in
+   * edit mode, where the goal itself is the source.
+   */
+  initialGoal?: { name?: string; goalType?: string; config?: Record<string, unknown> };
   trigger?: React.ReactNode;
   isCloneMode?: boolean; // Optional clone mode flag
   open?: boolean;
@@ -183,6 +189,7 @@ interface GoalFormModalProps {
 export default function GoalFormModal({
   siteId,
   goal,
+  initialGoal,
   trigger,
   isCloneMode = false,
   open,
@@ -351,17 +358,35 @@ export default function GoalFormModal({
             },
           }
         : {
-            name: "",
-            goalType: "path",
+            name: initialGoal?.name || "",
+            goalType: (initialGoal?.goalType as FormValues["goalType"]) || "path",
             config: {
-              pathPattern: "",
-              eventName: "",
-              valuePattern: "",
+              pathPattern: String(initialGoal?.config?.pathPattern || ""),
+              eventName: String(initialGoal?.config?.eventName || ""),
+              valuePattern: String(initialGoal?.config?.valuePattern || ""),
               eventPropertyKey: "",
               eventPropertyValue: "",
             },
           },
   });
+
+  // The form is mounted once, so a proposal that arrives later has to be pushed
+  // into it rather than only seeding its defaults.
+  useEffect(() => {
+    if (!isOpen || !initialGoal || goal) return;
+    form.reset({
+      name: initialGoal.name || "",
+      goalType: (initialGoal.goalType as FormValues["goalType"]) || "path",
+      config: {
+        pathPattern: String(initialGoal.config?.pathPattern || ""),
+        eventName: String(initialGoal.config?.eventName || ""),
+        valuePattern: String(initialGoal.config?.valuePattern || ""),
+        eventPropertyKey: "",
+        eventPropertyValue: "",
+      },
+    });
+    setUseProperties(false);
+  }, [isOpen, initialGoal, goal, form]);
 
   const goalType = form.watch("goalType");
 
