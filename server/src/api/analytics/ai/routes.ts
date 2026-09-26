@@ -54,7 +54,7 @@ const chatBodySchema = z.object({
  */
 const suggestBody = z.object({
   siteId: z.number().int().positive(),
-  kind: z.enum(["goal"]),
+  kind: z.enum(["goal", "funnel"]),
   ask: z.string().trim().max(300).optional(),
   context: z
     .object({
@@ -104,7 +104,7 @@ export async function analystSuggest(
 
     const result = await runAgent({
       history: [],
-      question: ask?.trim() || `Suggest a goal for ${site?.name ?? "this Site"}.`,
+      question: ask?.trim() || `Suggest a ${kind} for ${site?.name ?? "this Site"}.`,
       context: {
         siteId,
         siteName: site?.name,

@@ -126,7 +126,7 @@ export function getConversation(organizationId: string, siteId: number, id: stri
 }
 
 export function renameConversation(organizationId: string, siteId: number, id: string, title: string) {
-  return authedFetch<ConversationSummary>(`${conversationsUrl(organizationId)}/${id}`, { siteId }, { method: "PATCH", data: JSON.stringify({ title }) });
+  return authedFetch<ConversationSummary>(`${conversationsUrl(organizationId)}/${id}`, { siteId }, { method: "PATCH", data: { title } });
 }
 
 export function deleteConversation(organizationId: string, siteId: number, id: string) {
@@ -134,7 +134,7 @@ export function deleteConversation(organizationId: string, siteId: number, id: s
 }
 
 export function sendFeedback(organizationId: string, body: { siteId: number; messageId: string; rating: number; comment?: string }) {
-  return authedFetch<{ success: true }>(`/organizations/${organizationId}/analytics/feedback`, undefined, { method: "POST", data: JSON.stringify(body) });
+  return authedFetch<{ success: true }>(`/organizations/${organizationId}/analytics/feedback`, undefined, { method: "POST", data: body });
 }
 
 export function listMemories(organizationId: string, siteId: number) {
@@ -142,7 +142,7 @@ export function listMemories(organizationId: string, siteId: number) {
 }
 
 export function addMemory(organizationId: string, siteId: number, content: string) {
-  return authedFetch<{ id: string }>(`/organizations/${organizationId}/analytics/memories`, { siteId }, { method: "POST", data: JSON.stringify({ siteId, content }) });
+  return authedFetch<{ id: string }>(`/organizations/${organizationId}/analytics/memories`, { siteId }, { method: "POST", data: { siteId, content } });
 }
 
 export function deleteMemory(organizationId: string, siteId: number, id: string) {

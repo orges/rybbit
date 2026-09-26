@@ -3,22 +3,20 @@
 import { Loader2, Sparkles, TriangleAlert, X } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useState } from "react";
-import { suggest, type GoalProposal, type SuggestionResult } from "@/api/analyst/endpoints/suggest";
+import { suggest, type FunnelProposal, type SuggestionResult } from "@/api/analyst/endpoints/suggest";
 import { getStartAndEndDate } from "@/api/utils";
 import { Button } from "@/components/ui/button";
 import { useStore, useTimezone } from "@/lib/store";
-import GoalFormModal from "./GoalFormModal";
+import { CreateFunnelDialog } from "./CreateFunnel";
 
 /**
- * The copilot on the Goals page.
+ * The copilot on the Funnels page.
  *
- * It proposes a goal and then gets out of the way: the proposal is shown with the
- * reasoning and what it looked at, and "Open in the form" hands the value to the
- * same form a person fills in by hand. Nothing is saved here, so a wrong
- * suggestion costs a click rather than a delete.
+ * Same contract as the Goals one: it proposes a sequence, shows why and what it
+ * looked at, and hands the steps to the existing editor. Saving is the person's
+ * button, with the editor's own validation behind it.
  */
-
-export function GoalCopilot({ siteId, organizationId }: { siteId: number; organizationId: string }) {
+export function FunnelCopilot({ siteId, organizationId }: { siteId: number; organizationId: string }) {
   const t = useExtracted();
   const time = useStore(state => state.time);
   const filters = useStore(state => state.filters);
@@ -26,10 +24,11 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
   const [ask, setAsk] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SuggestionResult<GoalProposal> | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [result, setResult] = useState<SuggestionResult<FunnelProposal> | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
 
   const { startDate, endDate } = getStartAndEndDate(time, timeZone);
+  const proposal = result?.proposal ?? null;
 
   const run = async () => {
     setLoading(true);
@@ -37,7 +36,7 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
     setResult(null);
     try {
       setResult(
-        await suggest(organizationId, "goal", {
+        await suggest(organizationId, "funnel", {
           siteId,
           ...(ask.trim() ? { ask: ask.trim() } : {}),
           context: {
@@ -55,7 +54,6 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
     }
   };
 
-  const proposal = result?.proposal ?? null;
   const dismiss = () => {
     setResult(null);
     setAsk("");
@@ -76,8 +74,8 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
               }
             }}
             maxLength={300}
-            placeholder={t("Describe what to track, or leave empty for a suggestion")}
-            aria-label={t("Describe what to track")}
+            placeholder={t("Describe a journey, or leave empty for a suggestion")}
+            aria-label={t("Describe a journey")}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
           />
         </div>
@@ -104,13 +102,16 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
         <div className="space-y-2 rounded-lg border border-neutral-150 bg-white p-3 dark:border-neutral-850 dark:bg-neutral-900">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-sm font-medium">{proposal?.value.name || t("Suggested goal")}</p>
-              <p className="font-mono text-[11px] text-neutral-500 dark:text-neutral-400">
-                {proposal?.value.goalType}
-                {proposal?.value.config?.pathPattern ? ` · ${String(proposal.value.config.pathPattern)}` : ""}
-                {proposal?.value.config?.eventName ? ` · ${String(proposal.value.config.eventName)}` : ""}
-                {proposal?.value.config?.valuePattern ? ` · ${String(proposal.value.config.valuePattern)}` : ""}
-              </p>
+              <p className="text-sm font-medium">{proposal?.value.name || t("Suggested funnel")}</p>
+              {proposal && (
+                <ol className="space-y-0.5">
+                  {proposal.value.steps.map((step, index) => (
+                    <li key={index} className="truncate font-mono text-[11px] text-neutral-500 dark:text-neutral-400">
+                      {index + 1}. {step.type}: {step.value}
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
             <Button type="button" variant="ghost" size="smIcon" aria-label={t("Dismiss")} onClick={dismiss}>
               <X className="size-3.5" />
@@ -136,8 +137,8 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
 
           {proposal ? (
             <div className="flex items-center gap-2">
-              <Button type="button" size="sm" onClick={() => setShowForm(true)}>
-                {t("Open in the form")}
+              <Button type="button" size="sm" onClick={() => setShowEditor(true)}>
+                {t("Open in the editor")}
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => void run()}>
                 {t("Suggest another")}
@@ -148,16 +149,13 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
       )}
 
       {proposal && (
-        <GoalFormModal
-          siteId={siteId}
-          open={showForm}
+        <CreateFunnelDialog
+          open={showEditor}
           onOpenChange={next => {
-            setShowForm(next);
-            // Saved or not, the proposal has been dealt with; asking again
-            // should not reoffer the same one.
+            setShowEditor(next);
             if (!next) dismiss();
           }}
-          initialGoal={proposal.value}
+          initial={proposal.value}
         />
       )}
     </div>
