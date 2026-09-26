@@ -20,6 +20,12 @@ export interface FunnelProposal {
 }
 
 /** What the copilot looked at before proposing, so the reasoning is checkable. */
+export interface DashboardProposal {
+  kind: "dashboard";
+  value: { name: string; cards: Array<{ exampleId: string; title: string; vizType: string; category: string }> };
+  reason: string;
+}
+
 export interface SuggestionResult<T> {
   proposal: T | null;
   /** The model's own words when it had no proposal to make. */
@@ -42,9 +48,18 @@ export interface SuggestRequest {
 const endpoint = (organizationId: string) => `/organizations/${organizationId}/analytics/suggest`;
 
 export function suggest(organizationId: string, kind: "goal", body: SuggestRequest): Promise<SuggestionResult<GoalProposal>>;
-export function suggest(organizationId: string, kind: "funnel", body: SuggestRequest): Promise<SuggestionResult<FunnelProposal>>;
-export function suggest(organizationId: string, kind: "goal" | "funnel", body: SuggestRequest) {
-  return authedFetch<SuggestionResult<GoalProposal | FunnelProposal>>(endpoint(organizationId), undefined, {
+export function suggest(
+  organizationId: string,
+  kind: "funnel",
+  body: SuggestRequest
+): Promise<SuggestionResult<FunnelProposal>>;
+export function suggest(
+  organizationId: string,
+  kind: "dashboard",
+  body: SuggestRequest
+): Promise<SuggestionResult<DashboardProposal>>;
+export function suggest(organizationId: string, kind: "goal" | "funnel" | "dashboard", body: SuggestRequest) {
+  return authedFetch<SuggestionResult<GoalProposal | FunnelProposal | DashboardProposal>>(endpoint(organizationId), undefined, {
     method: "POST",
     // The object, not a string: axios only sets the JSON content type for one,
     // and the backend answers 415 for a body it cannot parse.

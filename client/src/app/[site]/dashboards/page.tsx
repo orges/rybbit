@@ -4,7 +4,9 @@ import { LayoutGrid, Loader2, Plus, Trash2 } from "lucide-react";
 import { DateTime } from "luxon";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { useGetSite } from "../../../api/admin/hooks/useSites";
 import { useCreateDashboard, useDeleteDashboard, useGetDashboards } from "../../../api/analytics/hooks/useDashboards";
+import { DashboardCopilot } from "./components/DashboardCopilot";
 import { Button } from "../../../components/ui/button";
 import {
   AlertDialog,
@@ -34,6 +36,7 @@ export default function DashboardsListPage() {
   const router = useRouter();
 
   const { data: dashboards, isLoading } = useGetDashboards(siteId);
+  const { data: siteData } = useGetSite(siteId);
   const createDashboard = useCreateDashboard();
   const deleteDashboard = useDeleteDashboard();
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
@@ -45,6 +48,7 @@ export default function DashboardsListPage() {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4 p-2 md:p-4">
+      {siteData?.organizationId && <DashboardCopilot siteId={siteId} organizationId={siteData.organizationId} />}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Dashboards</h1>
