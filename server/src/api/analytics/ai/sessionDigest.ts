@@ -37,6 +37,9 @@ export interface DigestStep {
   at: number;
   /** Seconds spent on this page before the next one, or before the session ended. */
   dwell: number;
+  /** Pageviews on this path in this visit. Above 1 when a soft navigation or a
+   * re-render fired another pageview without the visitor going anywhere. */
+  views: number;
 }
 
 export interface DigestClick {
@@ -189,14 +192,30 @@ export function digestSession(rows: TimelineRow[], opts: { endTimestamp?: number
 
   // --- steps, with dwell from the gap to the next pageview ---
   const pageviews = ordered.filter(row => row.type === "pageview");
-  const allSteps: DigestStep[] = pageviews.map((row, index) => {
-    const next = pageviews[index + 1];
-    return {
-      path: path(row),
-      at: at(row.timestamp),
-      dwell: Math.max(0, Math.round(((next?.timestamp ?? end) - row.timestamp) / 1000)),
-    };
-  });
+  // Consecutive views of one page collapse into a single step. A soft navigation
+  // or a re-render fires another pageview while the visitor stays put, so listing
+  // each one turns a short journey into a wall of repeats — and spends the step
+  // budget, which had sessions with twenty real transitions reported as
+  // truncated when they were not. A revisit after a different page is kept: that
+  // is a real part of the journey.
+  const visits: Array<{ path: string; first: number; views: number }> = [];
+  for (const row of pageviews) {
+    const p = path(row);
+    const open = visits[visits.length - 1];
+    if (open && open.path === p) {
+      open.views += 1;
+      continue;
+    }
+    visits.push({ path: p, first: row.timestamp, views: 1 });
+  }
+  const allSteps: DigestStep[] = visits.map((visit, index) => ({
+    path: visit.path,
+    at: at(visit.first),
+    // Dwell runs to the next visit, so a collapsed run keeps the whole time
+    // rather than only its first pageview's slice.
+    dwell: Math.max(0, Math.round(((visits[index + 1]?.first ?? end) - visit.first) / 1000)),
+    views: visit.views,
+  }));
   const stepsTruncated = allSteps.length > MAX_STEPS;
   const steps: DigestStep[] = stepsTruncated
     ? [...allSteps.slice(0, MAX_STEPS / 2), ...allSteps.slice(-MAX_STEPS / 2)]
@@ -328,7 +347,7 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     duration_seconds: digest.durationSeconds,
     entry_page: digest.entryPage,
     exit_page: digest.exitPage,
-    path: digest.steps.map(step => `${step.path} (${step.dwell}s)`),
+    path: digest.steps.map(step => `${step.path} (${step.dwell}s)${step.views > 1 ? ` ×${step.views} views` : ""}`),
     clicks: digest.clicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
     dead_clicks: digest.deadClicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
     fields_touched: digest.fields.map(field => `${field.name} (${field.kind}) ×${field.count}`),
@@ -341,7 +360,7 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     ...(digest.eventsTruncated
       ? {
           events_truncated: true,
-          note: "This session had more events than were read, so every count is a floor, not a total. Do not quote a count from this as an exact figure.",
+          note: "This session had more events than were read, so every count is a floor, not a total, and an empty list means none were found in the part that was read — not that the session had none. Do not state a count or an absence as exact.",
         }
       : {}),
     totals: digest.totals,
