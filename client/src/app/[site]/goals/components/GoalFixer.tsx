@@ -31,9 +31,9 @@ export function GoalFixer({ siteId, organizationId, goal }: { siteId: number; or
         organizationId={organizationId}
         kind="goal"
         existing={[{ ...(goal.name ? { name: goal.name } : {}), condition: pattern || goal.goalType }]}
-        initialAsk={t(
-          "This goal matched nothing in the last 30 days. What does this site actually do that I should be tracking instead?"
-        )}
+        // Matches the banner above it: the number on the card is the selected
+        // range, so the ask cannot claim a window the person is not looking at.
+        initialAsk={t("This goal matched nothing in the selected range. What does this site actually do that I should be tracking instead?")}
         askPlaceholder={t("Describe what to track instead")}
         revisePlaceholder={t("Say what to change about it")}
         loadingLabel={t("Looking at the pages and events this site actually has…")}
