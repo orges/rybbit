@@ -306,6 +306,10 @@ const orgSqlRead = orgMemberScoped("sql", "read");
 // one query per card), and /generate spends OpenRouter credit. Cap per user.
 const customQueryRateLimit = { max: 60, timeWindow: "1 minute" };
 const generateQueryRateLimit = { max: 20, timeWindow: "1 minute" };
+// An analyst request is not one query: the agent loop runs up to twelve of them
+// plus a model call, so it gets its own budget rather than the generate-SQL one,
+// which is sized for a single cheap statement.
+const analystRateLimit = { max: 10, timeWindow: "1 minute" };
 const withRateLimit = <T extends { preHandler: unknown }>(opts: T, limit: { max: number; timeWindow: string }) => ({
   ...opts,
   config: { rateLimit: limit },
@@ -518,12 +522,12 @@ async function analyticsRoutes(fastify: FastifyInstance) {
   );
   fastify.post(
     "/organizations/:organizationId/analytics/chat",
-    withRateLimit(orgSqlRead, generateQueryRateLimit),
+    withRateLimit(orgSqlRead, analystRateLimit),
     analystChat
   );
   fastify.post(
     "/organizations/:organizationId/analytics/suggest",
-    withRateLimit(orgSqlRead, generateQueryRateLimit),
+    withRateLimit(orgSqlRead, analystRateLimit),
     analystSuggest
   );
   fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleConversations);

@@ -301,13 +301,62 @@ export async function addMemory(input: {
   return row;
 }
 
-export async function deleteMemory(id: string) {
-  await db.delete(aiMemories).where(eq(aiMemories.id, id));
+/**
+ * Deletes one memory, scoped to the organization and Site it belongs to.
+ *
+ * The scope is a required argument rather than something the route remembers to
+ * check: a route that authorizes `siteId` and then deletes by bare id authorizes
+ * one tenant and deletes another one's row, and the id is all it takes. Making it
+ * impossible to call this without the scope is the whole fix.
+ *
+ * Returns false when the row is not the caller's, which is also how a missing row
+ * is reported.
+ */
+export async function deleteMemory(id: string, organizationId: string, siteId: number) {
+  const deleted = await db
+    .delete(aiMemories)
+    .where(
+      and(
+        eq(aiMemories.id, id),
+        eq(aiMemories.organizationId, organizationId),
+        eq(aiMemories.siteId, siteId)
+      )
+    )
+    .returning({ id: aiMemories.id });
+  return deleted.length > 0;
 }
 
-export async function setFeedback(messageId: string, rating: number, comment?: string) {
+/**
+ * Records a rating against one of the caller's own messages.
+ *
+ * `aiFeedback` keys on `messageId` alone, so ownership is settled through the
+ * message's conversation: an id from another organization must not be writable
+ * just because the caller can reach this endpoint.
+ */
+export async function setFeedback(
+  messageId: string,
+  rating: number,
+  comment: string | undefined,
+  owner: { userId: string; organizationId: string; siteId: number }
+) {
+  const [message] = await db
+    .select({ id: aiMessages.id })
+    .from(aiMessages)
+    .innerJoin(aiConversations, eq(aiMessages.conversationId, aiConversations.id))
+    .where(
+      and(
+        eq(aiMessages.id, messageId),
+        eq(aiConversations.userId, owner.userId),
+        eq(aiConversations.organizationId, owner.organizationId),
+        eq(aiConversations.siteId, owner.siteId)
+      )
+    )
+    .limit(1);
+  if (!message) return false;
+
   await db
     .insert(aiFeedback)
     .values({ messageId, rating, comment: comment?.slice(0, 1000) })
     .onConflictDoUpdate({ target: aiFeedback.messageId, set: { rating, comment: comment?.slice(0, 1000) } });
+  return true;
 }

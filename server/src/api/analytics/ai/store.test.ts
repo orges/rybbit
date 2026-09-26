@@ -1,21 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { db, inArray } = vi.hoisted(() => ({
+const { db, inArray, and, eq } = vi.hoisted(() => ({
   db: {} as Record<string, unknown>,
   inArray: vi.fn((_column: unknown, values: string[]) => ({ values })),
+  // Recorders rather than the real builders: the security property is which
+  // column is paired with which value, and a real `eq` hides both inside SQL.
+  and: vi.fn((...conditions: unknown[]) => ({ conditions })),
+  eq: vi.fn((column: unknown, value: unknown) => ({ column, value })),
 }));
 
 vi.mock("../../../db/postgres/postgres.js", () => ({ db }));
-vi.mock("drizzle-orm", async importOriginal => ({ ...(await importOriginal<typeof import("drizzle-orm")>()), inArray }));
+vi.mock("drizzle-orm", async importOriginal => ({ ...(await importOriginal<typeof import("drizzle-orm")>()), inArray, and, eq }));
 vi.mock("../../../db/postgres/schema.js", () => ({
-  aiConversations: {},
-  aiFeedback: {},
-  aiMemories: {},
-  aiMessages: {},
+  aiConversations: { id: "c.id", userId: "c.userId", organizationId: "c.orgId", siteId: "c.siteId", title: "c.title", updatedAt: "c.updatedAt", createdAt: "c.createdAt" },
+  aiMessages: { id: "m.id", conversationId: "m.conversationId", role: "m.role", content: "m.content", parts: "m.parts", createdAt: "m.createdAt" },
+  aiFeedback: { messageId: "f.messageId", rating: "f.rating", comment: "f.comment" },
+  aiMemories: { id: "mem.id", organizationId: "mem.orgId", siteId: "mem.siteId", content: "mem.content", createdAt: "mem.createdAt" },
   aiRuns: {},
 }));
 
-import { toClientMessage } from "./store.js";
+import { deleteMemory, setFeedback, toClientMessage } from "./store.js";
 
 describe("toClientMessage", () => {
   it("lifts a stored assistant turn's tool trail, artifacts and usage onto the message", () => {
@@ -148,5 +152,75 @@ describe("snippetAround", () => {
     const { likeTerm } = await import("./store.js");
     expect(likeTerm("100%_bounce")).toBe("%100\\%\\_bounce%");
     expect(likeTerm("  padded  ")).toBe("%padded%");
+  });
+});
+
+describe("scoping a write to the caller", () => {
+  // The security property is that the owner's organization and Site reach the
+  // WHERE clause, not merely that they were passed in: a delete filtered on the
+  // row id alone is one tenant's row reachable from another's request.
+  const conditions: unknown[][] = [];
+  const deleted: { rows: Array<{ id: string }> } = { rows: [] };
+
+  const withDb = async (run: () => Promise<boolean>) => {
+    conditions.length = 0;
+    const limit = vi.fn(async () => (deleted.rows.length ? [{ id: "m1" }] : []));
+    const where = vi.fn((...args: unknown[]) => {
+      conditions.push(args);
+      return { limit, returning: vi.fn(async () => deleted.rows) };
+    });
+    (db as Record<string, unknown>).delete = vi.fn(() => ({ where }));
+    (db as Record<string, unknown>).select = vi.fn(() => ({
+      from: () => ({ innerJoin: () => ({ where }) }),
+    }));
+    (db as Record<string, unknown>).insert = vi.fn(() => ({
+      values: () => ({ onConflictDoUpdate: vi.fn(async () => undefined) }),
+    }));
+    return run();
+  };
+
+  beforeEach(() => {
+    deleted.rows = [];
+  });
+
+  it("deletes a memory only within the organization and Site that asked", async () => {
+    const ok = await withDb(() => deleteMemory("mem-1", "org-a", 7));
+    expect(ok).toBe(false); // nothing matched
+    expect(eq.mock.calls).toContainEqual(["mem.id", "mem-1"]);
+    expect(eq.mock.calls).toContainEqual(["mem.orgId", "org-a"]);
+    expect(eq.mock.calls).toContainEqual(["mem.siteId", 7]);
+  });
+
+  it("reports a delete that matched nothing, so a foreign id is a 404 not a success", async () => {
+    deleted.rows = [];
+    const ok = await withDb(() => deleteMemory("mem-foreign", "org-a", 7));
+    expect(ok).toBe(false);
+  });
+
+  it("settles feedback ownership through the message's conversation", async () => {
+    deleted.rows = [{ id: "m1" }];
+    await withDb(() => setFeedback("msg-1", 1, undefined, { userId: "u1", organizationId: "org-a", siteId: 3 }));
+    expect(eq.mock.calls).toContainEqual(["m.id", "msg-1"]);
+    expect(eq.mock.calls).toContainEqual(["c.userId", "u1"]);
+    expect(eq.mock.calls).toContainEqual(["c.orgId", "org-a"]);
+    expect(eq.mock.calls).toContainEqual(["c.siteId", 3]);
+  });
+
+  it("does not write feedback for a message the caller does not own", async () => {
+    const insert = vi.fn(() => ({ values: () => ({ onConflictDoUpdate: vi.fn() }) }));
+    const ok = await withDb(() => {
+      (db as Record<string, unknown>).insert = insert;
+      return setFeedback("msg-foreign", 1, "x", { userId: "u1", organizationId: "org-b", siteId: 9 });
+    });
+    expect(ok).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("writes feedback for a message the caller does own", async () => {
+    deleted.rows = [{ id: "m1" }];
+    const ok = await withDb(() =>
+      setFeedback("msg-mine", -1, "wrong", { userId: "u1", organizationId: "org-a", siteId: 1 })
+    );
+    expect(ok).toBe(true);
   });
 });

@@ -113,7 +113,10 @@ export async function analystSuggest(
   }
 
   const abort = new AbortController();
-  request.raw.on("aborted", () => abort.abort());
+  // Kept as a value so the listener can actually be removed: an inline closure in
+  // `off` is a different function, which left the `finally` doing nothing.
+  const onAborted = () => abort.abort();
+  request.raw.on("aborted", onAborted);
 
   try {
     const timezone = context.timeZone || "UTC";
@@ -194,7 +197,7 @@ export async function analystSuggest(
       .status(error instanceof OpenRouterError && error.code === "missing_api_key" ? 503 : 502)
       .send({ error: "The suggestion could not be made" });
   } finally {
-    request.raw.off("aborted", () => abort.abort());
+    request.raw.off("aborted", onAborted);
   }
 }
 
@@ -461,11 +464,19 @@ export async function handleFeedback(
   const params = conversationParams.safeParse(request.params);
   const body = feedbackBody.safeParse(request.body);
   if (!params.success || !body.success) return reply.status(400).send({ error: "Invalid feedback" });
-  if (!(await authorize(request, params.data.organizationId, body.data.siteId))) {
+  const userId = request.user?.id;
+  if (!userId) return reply.status(403).send({ error: "A user session is required" });
+  const { organizationId } = params.data;
+  const { siteId, messageId, rating, comment } = body.data;
+  if (!(await authorize(request, organizationId, siteId))) {
     return reply.status(403).send({ error: "No access to the requested site" });
   }
   try {
-    await store.setFeedback(body.data.messageId, body.data.rating, body.data.comment);
+    // 404 rather than 403: a message in another organization is not this caller's
+    // to know about, and a 403 would confirm the id exists.
+    if (!(await store.setFeedback(messageId, rating, comment, { userId, organizationId, siteId }))) {
+      return reply.status(404).send({ error: "Message not found" });
+    }
     return reply.send({ success: true });
   } catch (error) {
     request.log.error(error, "Failed to record AI feedback");
@@ -483,10 +494,17 @@ export async function handleMemories(
   reply: FastifyReply
 ) {
   const params = z.object({ organizationId: z.string().min(1), memoryId: z.string().uuid().optional() }).safeParse(request.params);
-  const query = siteQuery.safeParse(request.query);
-  if (!params.success || !query.success) return reply.status(400).send({ error: "Invalid memory request" });
+  if (!params.success) return reply.status(400).send({ error: "Invalid memory request" });
   const { organizationId } = params.data;
-  const siteId = request.method === "GET" || request.method === "DELETE" ? query.data.siteId : undefined;
+  // Reading and deleting name the Site in the query; writing carries it in the
+  // body, which is the body being validated anyway. The old ternary read only the
+  // query, so POST could never name a Site and every write was a 400 — a feature
+  // that looked like it worked and stored nothing.
+  const query = request.method === "POST" ? undefined : siteQuery.safeParse(request.query);
+  if (query && !query.success) return reply.status(400).send({ error: "Invalid memory request" });
+  const body = request.method === "POST" ? memoryBody.safeParse(request.body) : undefined;
+  if (body && !body.success) return reply.status(400).send({ error: body.error.errors[0]?.message });
+  const siteId = body?.data.siteId ?? query?.data.siteId;
   if (!siteId) return reply.status(400).send({ error: "siteId is required" });
   if (!(await authorize(request, organizationId, siteId))) {
     return reply.status(403).send({ error: "No access to the requested site" });
@@ -495,15 +513,17 @@ export async function handleMemories(
     if (request.method === "GET") return reply.send(await store.listMemories(organizationId, siteId));
     if (request.method === "DELETE") {
       if (!params.data.memoryId) return reply.status(400).send({ error: "Invalid memory id" });
-      await store.deleteMemory(params.data.memoryId);
+      // Scoped in the store rather than here: authorizing `siteId` and then
+      // deleting by bare id is how one tenant deletes another tenant's memory.
+      if (!(await store.deleteMemory(params.data.memoryId, organizationId, siteId))) {
+        return reply.status(404).send({ error: "Memory not found" });
+      }
       return reply.send({ success: true });
     }
-    const body = memoryBody.safeParse(request.body);
-    if (!body.success) return reply.status(400).send({ error: body.error.errors[0]?.message });
     const row = await store.addMemory({
       organizationId,
-      siteId: body.data.siteId,
-      content: body.data.content,
+      siteId,
+      content: body!.data.content,
       createdBy: request.user?.id,
     });
     return reply.send(row);
