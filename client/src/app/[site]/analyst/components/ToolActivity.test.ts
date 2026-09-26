@@ -31,3 +31,21 @@ describe("describeInput", () => {
     expect(describeInput(undefined)).toBe("");
   });
 });
+
+describe("filters, which are objects rather than values", () => {
+  it("reads a filter the way it was asked for, not as [object Object]", () => {
+    const described = describeInput({
+      filters: [
+        { parameter: "pathname", type: "contains", value: ["/watch/"] },
+        { parameter: "device_type", type: "equals", value: ["mobile"] },
+      ],
+    });
+    expect(described).toContain("pathname contains /watch/");
+    expect(described).toContain("device_type equals mobile");
+    expect(described).not.toContain("object Object");
+  });
+
+  it("leaves an array of plain values alone", () => {
+    expect(describeInput({ steps: [{ type: "page", value: "/" }, { type: "event", value: "signup" }] })).toBe("2 steps");
+  });
+});

@@ -22,6 +22,15 @@ export function describeInput(input: Record<string, unknown> | undefined): strin
     }
     if (Array.isArray(value)) {
       if (!value.length) continue;
+      // A filter is {parameter, type, value}, and String() on one of those is
+      // "[object Object]" — which tells a reader nothing about what was searched.
+      if (value.every(entry => entry && typeof entry === "object" && "parameter" in entry)) {
+        const described = (value as Array<Record<string, unknown>>)
+          .map(entry => `${String(entry.parameter)} ${String(entry.type).replace(/_/g, " ")} ${(entry.value as unknown[] | undefined)?.map(String).join(", ") ?? ""}`.trim())
+          .join("; ");
+        parts.push(described);
+        continue;
+      }
       parts.push(key === "steps" ? `${value.length} steps` : `${key}: ${value.map(String).join(", ")}`);
       continue;
     }

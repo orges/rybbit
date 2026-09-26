@@ -803,7 +803,7 @@ const filterArgsShape = {
 const searchReplays: AnalystTool = {
   name: "search_replays",
   description:
-    "Find sessions, with their duration, entry page, country, browser and device, returning session ids you can then read with get_session_timeline or compare with analyse_sessions. Filter by what the visitor did — the page they visited, the event they fired, a device or country — as well as by duration or user.",
+    "Find sessions, returning session ids you can read with get_session_timeline or compare with analyse_sessions. Filter by what the visitor did — a page they visited, an event they fired, a device or country — as well as by duration or user. Two filters mean both must hold, but not in any order: to ask for one page followed by another, say so in the question and check the order by reading the session. A session id here means the visitor did the thing, not that it went the way you imagined — read one before you say it did.",
   parameters: {
     type: "object",
     properties: {
