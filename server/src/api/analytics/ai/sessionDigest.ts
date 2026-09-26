@@ -69,6 +69,14 @@ export interface DigestError {
 export interface SessionDigest {
   /** A list was cut at MAX_ITEMS, so this is a summary of a part. */
   truncated: boolean;
+  /**
+   * The event stream itself was cut at the row cap, so every count here is a
+   * floor rather than a total. Distinct from `truncated`: this one means the
+   * numbers are wrong, not that a list is short.
+   */
+  eventsTruncated?: boolean;
+  /** Events that existed, which may be more than were read. */
+  eventCount?: number;
   durationSeconds: number;
   entryPage: string;
   exitPage: string;
@@ -310,6 +318,12 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     custom_events: digest.customEvents.map(event => `${event.name} ×${event.count}`),
     outbound: digest.outbound,
     truncated: digest.truncated,
+    ...(digest.eventsTruncated
+      ? {
+          events_truncated: true,
+          note: "This session had more events than were read, so every count is a floor, not a total. Do not quote a count from this as an exact figure.",
+        }
+      : {}),
     totals: digest.totals,
   };
 }

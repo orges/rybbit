@@ -110,11 +110,17 @@ export function windowFor(args: Record<string, unknown>, ctx: ToolContext) {
 
 async function digestOne(ctx: ToolContext, sessionId: string, args: Record<string, unknown>): Promise<SessionDigest> {
   const range = windowFor(args, ctx);
+  // One row over the cap, so a session with more events than we read is *known*
+  // to have had them. Reading exactly the cap and stopping cannot tell the
+  // difference between "that was all of it" and "there was more", and a digest
+  // that quietly undercounts clicks is worse than one that admits it is partial.
   const rows = await runAnalyticsQuery<Record<string, unknown>>({
     query: buildSessionTimelineQuery(timeStatementFor(range, ctx.timezone)),
-    params: { siteId: ctx.siteId, sessionId, limit: MAX_TIMELINE_ROWS },
+    params: { siteId: ctx.siteId, sessionId, limit: MAX_TIMELINE_ROWS + 1 },
   });
-  return digestSession(rows.map(toTimelineRow));
+  const eventsTruncated = rows.length > MAX_TIMELINE_ROWS;
+  const digest = digestSession((eventsTruncated ? rows.slice(0, MAX_TIMELINE_ROWS) : rows).map(toTimelineRow));
+  return eventsTruncated ? { ...digest, eventsTruncated: true, eventCount: rows.length } : digest;
 }
 
 const sessionIdSchema = z.string().min(1).max(64);

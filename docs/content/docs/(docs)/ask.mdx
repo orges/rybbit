@@ -63,10 +63,21 @@ Sent to the model on every question:
 - **Project memory** — everything added with `/remember`, on every question, for every thread on that Site.
 - **Rows from your analytics**, including page titles, URLs, referrers, custom event names and event property values. These are stripped of control characters, not of content.
 - **The Site's name** and the dashboard filters in effect when you asked.
+- **A structural summary of individual sessions**, if you ask what a visitor did: the pages they visited with time on each, what they clicked and how often, which form fields they touched, whether a form was submitted, and error messages.
 
-Not sent: session replay recordings, raw row data outside what a tool returned, and anything belonging to another Site or organization. Every tool is read-only and bound to the one Site you are asking about, and Ask cannot write, save or delete anything.
+Not sent: session replay recordings, the contents of the page, anything a visitor typed, copied text, or anything belonging to another Site or organization. The session summary cannot include typed input — Rybbit's tracker records the field a visitor touched, never what was in it — so that is a property of the data rather than something filtered on the way out. Replay recordings themselves are never read.
+
+Every tool is read-only and bound to the one Site you are asking about, and Ask cannot write, save or delete anything.
 
 The trade is that the analysis happens wherever the model runs. If that matters — and for visitor-level strings it often does — point `OPENROUTER_API_URL` at a gateway you control. `OPENROUTER_API_URL`, `OPENROUTER_MODEL` and `OPENROUTER_API_KEY` are all it takes; there is no separate privacy mode to configure.
+
+## Reading what visitors did
+
+Ask can summarise a session as structure: pages in order with time on each, clicks grouped by control, which form fields were touched, whether the form was submitted, errors, outbound links. Give it a session id and it will read one; give it several and it reports only what they share — the page where they stopped, controls that led nowhere, forms touched but never submitted, errors that repeat.
+
+This is the interaction events your tracker already records, reduced to a summary. It is **not** session replay: no recording is read, no page content is, and nothing a visitor typed is available to it — the tracker never records it, so Ask cannot report what was in a field and will say so if asked.
+
+It follows the **session replay** setting in Site Settings, so it is available on a Site only where you already keep session recordings. It costs no extra storage and does not change what is recorded.
 
 ## What is stored
 
