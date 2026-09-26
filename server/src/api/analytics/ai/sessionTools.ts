@@ -236,7 +236,12 @@ const analyseSessions: AnalystTool = {
       text: JSON.stringify({
         sessions_compared: found.length,
         shared_exit_pages: shared(digest => (digest.exitPage ? [digest.exitPage] : [])),
-        shared_dead_clicks: shared(digest => digest.deadClicks.map(click => `${click.label} on ${click.path} (×${click.count})`)),
+        shared_clicks_with_no_navigation: shared(digest =>
+          digest.deadClicks.map(click => `${click.label} on ${click.path} (×${click.count})`)
+        ),
+        // Same caveat as the single-session digest, for the same reason.
+        clicks_note:
+          "A click with no page change or submit within 2s. Controls that act in place — video seek and volume, toggles, filters, tabs — always look like this, so treat one as a lead to corroborate, never as a control that did not work.",
         forms_touched_not_submitted: shared(digest =>
           digest.forms.filter(form => !form.submitted).map(form => `${form.name} (${form.fields.join(", ") || "no fields"})`)
         ),

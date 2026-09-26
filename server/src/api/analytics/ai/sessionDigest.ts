@@ -349,7 +349,14 @@ export function digestForModel(digest: SessionDigest, sessionId: string) {
     exit_page: digest.exitPage,
     path: digest.steps.map(step => `${step.path} (${step.dwell}s)${step.views > 1 ? ` ×${step.views} views` : ""}`),
     clicks: digest.clicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
-    dead_clicks: digest.deadClicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
+    clicks_with_no_navigation: digest.deadClicks.map(click => `${click.label} ×${click.count} on ${click.path}`),
+    // The heuristic cannot tell a control that does nothing from one that acts
+    // where it stands — a video seek, a volume slider, a toggle, a filter, a tab —
+    // because neither of them navigates. Asked what UX problems a session showed,
+    // the analyst read "+10s ×160" as a broken player and led with it. The
+    // caveat travels with the data rather than relying on a prompt rule.
+    clicks_note:
+      "A click with no page change or submit within 2s. Controls that act in place — video seek and volume, toggles, filters, tabs — always look like this, so treat one as a lead to corroborate, never as a control that did not work.",
     fields_touched: digest.fields.map(field => `${field.name} (${field.kind}) ×${field.count}`),
     forms: digest.forms.map(form => `${form.name}: ${form.submitted ? "submitted" : "NOT submitted"}, fields ${form.fields.join(", ") || "none"}`),
     errors: digest.errors.map(error => `${error.message}${error.kind ? ` (${error.kind})` : ""} at ${error.at}s`),
