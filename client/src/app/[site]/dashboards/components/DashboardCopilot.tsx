@@ -9,8 +9,36 @@ import { useCreateDashboard } from "@/api/analytics/hooks/useDashboards";
 import { suggest, type DashboardProposal, type SuggestionResult } from "@/api/analyst/endpoints/suggest";
 import { getStartAndEndDate } from "@/api/utils";
 import { Button } from "@/components/ui/button";
+import { getDashboardTimeForRange } from "@/lib/defaultTimeRange";
 import { useStore, useTimezone } from "@/lib/store";
 import { createCardFromExample } from "../utils";
+
+/**
+ * Flows cards left to right across the 12-column grid, wrapping when a row is
+ * full and carrying the tallest card's height into the next row.
+ *
+ * The editor stacks hand-added cards at x: 0, which is right while you are
+ * adding one at a time and wrong for a proposed dashboard: five cards would
+ * arrive as one tall strip instead of something read at a glance.
+ */
+function layout(cards: DashboardCard[]) {
+  const GRID = 12;
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  for (const card of cards) {
+    const w = Math.min(card.gridPos.w || 6, GRID);
+    if (x + w > GRID) {
+      x = 0;
+      y += rowHeight;
+      rowHeight = 0;
+    }
+    card.gridPos = { x, y, w, h: card.gridPos.h || 5 };
+    x += w;
+    rowHeight = Math.max(rowHeight, card.gridPos.h);
+  }
+  return cards;
+}
 
 /**
  * The copilot on the Dashboards page.
@@ -75,6 +103,10 @@ export function DashboardCopilot({ siteId, organizationId }: { siteId: number; o
       const built = createCardFromExample(index, cards, example);
       cards.push({ ...built, title: card.title || built.title });
     }
+    layout(cards);
+    // The proposal looked over a month, so a dashboard opening on an hour reads as
+    // empty. Open it on a week: the range a dashboard is normally read at.
+    useStore.getState().setTime(getDashboardTimeForRange("last-7-days", timeZone));
     const created = await createDashboard.mutateAsync({ siteId, name: proposal.value.name, config: { cards } });
     router.push(`/${siteId}/dashboards/${created.dashboardId}`);
   };
