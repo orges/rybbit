@@ -235,24 +235,6 @@ export default function GoalCard({ goal, siteId, timeSeries, isLoadingTimeSeries
               )}
             </div>
           </div>
-          {goal.total_conversions === 0 && !isFixing && (
-            <div onClick={e => e.stopPropagation()} className="px-4 pb-3 -mt-1">
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/60 dark:bg-amber-950/30">
-                <p className="min-w-0 flex-1 text-xs text-amber-800 dark:text-amber-300">
-                  {t("No conversions in the selected range.")}
-                </p>
-                <Button type="button" size="sm" variant="outline" onClick={() => setIsFixing(true)}>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {t("Find what to track instead")}
-                </Button>
-              </div>
-            </div>
-          )}
-          {isFixing && siteData?.organizationId && (
-            <div onClick={e => e.stopPropagation()} className="px-4 pb-3 -mt-1">
-              <GoalFixer siteId={siteId} organizationId={siteData.organizationId} goal={goal} />
-            </div>
-          )}
           {/* Center section - Stats */}
           <div className="w-full min-w-0 md:flex-1 flex justify-start md:justify-center">
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4 md:gap-6">
@@ -311,6 +293,26 @@ export default function GoalCard({ goal, siteId, timeSeries, isLoadingTimeSeries
             </Tooltip>
           </div>
         </div>
+
+        {/* Below the header row, not inside it: as a fourth column the stats
+            sparkline sits on top of this and swallows the click. */}
+        {(goal.total_conversions === 0 || isFixing) && (
+          <div onClick={e => e.stopPropagation()} className="px-4 pb-3">
+            {isFixing && siteData?.organizationId ? (
+              <GoalFixer siteId={siteId} organizationId={siteData.organizationId} goal={goal} />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/60 dark:bg-amber-950/30">
+                <p className="min-w-0 flex-1 text-xs text-amber-800 dark:text-amber-300">
+                  {t("No conversions in the selected range.")}
+                </p>
+                <Button type="button" size="sm" variant="outline" onClick={() => setIsFixing(true)}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("Find what to track instead")}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="relative">
           <div className="bg-neutral-100 dark:bg-neutral-700 h-1.5 w-full absolute bottom-0 left-0"></div>
           <div
