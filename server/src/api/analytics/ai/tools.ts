@@ -827,18 +827,24 @@ const searchReplays: AnalystTool = {
       ...(args.min_duration ? { minDuration: Number(args.min_duration) } : {}),
       ...(args.user_id ? { userId: String(args.user_id) } : {}),
     });
+    // The service hands back ClickHouse's own column names, not the camelCase in
+    // its declared return type. Reading `sessionId` here produced undefined, and
+    // JSON.stringify drops undefined — so this tool returned rows with no session
+    // id at all, which is the one field the model needs to read a session. It
+    // looked like a search that found nothing it could use.
     const rows = sessions as unknown as ToolRow[];
     return {
       text: JSON.stringify({
         range: range.label,
         count: rows.length,
         sessions: rows.slice(0, 10).map(row => ({
-          session_id: row.sessionId,
-          duration_seconds: row.duration,
-          entry_page: row.entryPage,
+          session_id: row.session_id,
+          started: row.start_time,
+          duration_seconds: row.duration_ms,
+          entry_page: row.page_url,
           country: row.country,
           browser: row.browser,
-          device_type: row.deviceType,
+          device_type: row.device_type,
         })),
       }),
       rows,
