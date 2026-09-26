@@ -1,5 +1,5 @@
 import { EVENT_SCHEMA } from "../utils/eventSchema.js";
-import { ANALYST_TOOLS, type ToolContext } from "./tools.js";
+import { ANALYST_TOOLS, type AnalystTool, type ToolContext } from "./tools.js";
 import { PRESENTATION_TOOLS } from "./presentation.js";
 import type { Filter } from "@rybbit/shared";
 
@@ -90,6 +90,18 @@ export const ANALYST_TOOL_SCHEMAS = [...ANALYST_TOOLS, ...PRESENTATION_TOOLS].ma
   type: "function" as const,
   function: { name: tool.name, description: tool.description, parameters: tool.parameters },
 }));
+
+/**
+ * The wire schemas for the tools a run is actually allowed to call. A narrowed
+ * set has to be sent narrowed: a prompt that tells the model to call a tool it was
+ * not offered gets an answer saying the action is unavailable.
+ */
+export function toolSchemas(tools: Map<string, AnalystTool>) {
+  return [...tools.values()].map(tool => ({
+    type: "function" as const,
+    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+  }));
+}
 
 
 export const ANALYST_EXAMPLE_PROMPTS = [

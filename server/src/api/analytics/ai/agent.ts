@@ -6,7 +6,7 @@ import {
   type OpenRouterToolCall,
   type OpenRouterUsage,
 } from "../../../lib/openrouter.js";
-import { ANALYST_TOOL_SCHEMAS, buildSystemPrompt, type AnalystContext } from "./prompt.js";
+import { buildSystemPrompt, toolSchemas, type AnalystContext } from "./prompt.js";
 import { ALL_TOOLS, ResultStore, type Artifact } from "./presentation.js";
 import { toolFailure, type AnalystTool, type ToolContext, type ToolProposal } from "./tools.js";
 import { unsupportedFigures } from "./verify.js";
@@ -122,7 +122,9 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     try {
       for await (const event of streamChat({
         messages,
-        tools: ANALYST_TOOL_SCHEMAS,
+        // Derived from the same map the run may call, so a proposal run is never
+        // told to call a tool it was not offered.
+        tools: toolSchemas(tools),
         maxTokens: 4_000,
         temperature: 0.2,
         signal,

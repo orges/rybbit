@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { goalBodySchema } from "../goals/goalSchema.js";
 import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolProposal } from "./tools.js";
-import { ANALYST_TOOL_SCHEMAS } from "./prompt.js";
 
 /**
  * Proposing things a person then saves.
@@ -132,13 +131,6 @@ export const PROPOSAL_TOOLS: Map<string, AnalystTool> = new Map(
     proposeFunnel,
   ].map(tool => [tool.name, tool])
 );
-
-export const PROPOSAL_TOOL_SCHEMAS = PROPOSAL_TOOL_SCHEMAS_FOR();
-
-function PROPOSAL_TOOL_SCHEMAS_FOR() {
-  const wanted = new Set(PROPOSAL_TOOLS.keys());
-  return ANALYST_TOOL_SCHEMAS.filter(schema => wanted.has(schema.function.name));
-}
 
 /**
  * The copilot prompt.
