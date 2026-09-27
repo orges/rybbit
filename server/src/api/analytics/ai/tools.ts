@@ -445,11 +445,26 @@ const getErrors: AnalystTool = {
       });
       return { text: JSON.stringify({ error_message: args.error_message, range: range.label, bucket, points: rows.length }), rows, preview: { limit: 60 } };
     }
+    // One row past the cap, so "there are more" is known rather than guessed.
+    // `count` used to be the number of rows returned, which read as the number of
+    // distinct errors on the Site: ask for the top 3 and the answer said three.
+    const limit = Math.min(Number(args.limit ?? 10), 50);
     const rows = await query<ErrorNameItem>({
-      query: buildErrorNamesQuery({ ...params, limit: Math.min(Number(args.limit ?? 10), 50) }, ctx.siteId),
+      query: buildErrorNamesQuery({ ...params, limit: limit + 1 }, ctx.siteId),
       params: { siteId: ctx.siteId },
     });
-    return { text: JSON.stringify({ range: range.label, count: rows.length, errors: rows.slice(0, 10) }), rows, preview: { limit: 50 } };
+    const capped = rows.length > limit;
+    const listed = capped ? rows.slice(0, limit) : rows;
+    return {
+      text: JSON.stringify({
+        range: range.label,
+        listed: listed.length,
+        ...(capped ? { more_exist: true } : {}),
+        errors: listed.slice(0, 10),
+      }),
+      rows: listed,
+      preview: { limit: 50 },
+    };
   },
 };
 
