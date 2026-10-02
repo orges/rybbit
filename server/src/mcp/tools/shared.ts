@@ -30,24 +30,34 @@ export type ToolResult = {
 // tracked traffic and are untrusted. Strip control and bidi-override characters
 // that could be used to disguise instructions to an AI client; keep tab/newline
 // so legitimate multi-line values stay readable.
-const UNSAFE_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g;
+const UNSAFE_CHARS = /[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g;
 
-function sanitizeValue(value: unknown): unknown {
+/**
+ * Cleans one value out of a query result.
+ *
+ * NUL is removed rather than replaced: it is how ClickHouse pads `FixedString`
+ * columns, so an unknown country arrives as two NUL bytes rather than as
+ * content. Besides rendering as nothing, a NUL that reaches a JSON document
+ * makes Postgres reject the write.
+ */
+export function sanitizeUntrustedValue(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(UNSAFE_CHARS, " ");
+    return value.replace(/\0/g, "").replace(UNSAFE_CHARS, " ");
   }
   if (Array.isArray(value)) {
-    return value.map(item => sanitizeValue(item));
+    return value.map(item => sanitizeUntrustedValue(item));
   }
   if (value && typeof value === "object") {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      result[key] = sanitizeValue(entry);
+      result[key] = sanitizeUntrustedValue(entry);
     }
     return result;
   }
   return value;
 }
+
+const sanitizeValue = sanitizeUntrustedValue;
 
 export function ok(data: unknown): ToolResult {
   if (typeof data === "string") {

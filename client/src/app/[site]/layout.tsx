@@ -20,6 +20,8 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { setSiteContext, site, privateKey } = useStore();
   const { embed, hideSidebar } = useEmbedPageOptions();
+  // "ask" is the name of the feature; "analyst" stays valid so an old link still lands on it.
+  const isAnalyst = ["ask", "analyst"].includes(getSiteRouteContext(pathname).route ?? "");
 
   // Sync store state with URL parameters
   useSyncStateWithUrl();
@@ -45,9 +47,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
 
   if (width && width < 768) {
     return (
-      <div>
+      <div className={isAnalyst ? "flex h-dvh flex-col" : undefined}>
         <Header />
-        <div>{children}</div>
+        <div className={isAnalyst ? "min-h-0 flex-1" : undefined}>{children}</div>
       </div>
     );
   }
@@ -61,17 +63,22 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
           </div>
         )}
-        <div className="flex-1 overflow-auto">
-          <div className="min-h-full flex flex-col">
+        {/* The analyst owns its own scrolling: the thread pane scrolls and the
+            composer stays pinned. Letting this scroller scroll as well meant that
+            in a short window the panel ran off the bottom edge with its composer
+            below the fold. */}
+        <div className={isAnalyst ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 overflow-auto"}>
+          <div className={isAnalyst ? "flex h-full min-h-0 flex-col" : "min-h-full flex flex-col"}>
             {/* <div className="px-4 py-2 max-w-[1400px] mx-auto w-full mb-4"> */}
             <Header />
-            <div className="flex-1">{children}</div>
+            <div className={isAnalyst ? "min-h-0 flex-1" : "flex-1"}>{children}</div>
             {!pathname.includes("/map") &&
               !pathname.includes("/realtime") &&
               !pathname.includes("/replay") &&
               !pathname.includes("/globe") &&
               !pathname.includes("/api-playground") &&
-              !pathname.includes("/query") && <Footer disabled={embed} />}
+              !pathname.includes("/query") &&
+              !isAnalyst && <Footer disabled={embed} />}
           </div>
         </div>
       </div>

@@ -14,7 +14,9 @@ import { ErrorState } from "../../../components/ErrorState";
 import { NothingFound } from "../../../components/NothingFound";
 import { useSetPageTitle } from "../../../hooks/useSetPageTitle";
 import { SubHeader } from "../components/SubHeader/SubHeader";
+import { useGetSite } from "../../../api/admin/hooks/useSites";
 import { CreateFunnelDialog } from "./components/CreateFunnel";
+import { FunnelCopilot } from "./components/FunnelCopilot";
 import { FunnelRow } from "./components/FunnelRow";
 import { ExternalLink } from "../../../components/ExternalLink";
 
@@ -64,6 +66,7 @@ export default function FunnelsPage() {
   useSetPageTitle("Funnels");
 
   const { site } = useStore();
+  const { data: siteData } = useGetSite(Number(site));
   const { data: funnels, isLoading, error } = useGetFunnels(site);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -98,6 +101,8 @@ export default function FunnelsPage() {
           />
           <CreateFunnelDialog />
         </div>
+
+        {siteData?.organizationId && <FunnelCopilot siteId={Number(site)} organizationId={siteData.organizationId} />}
 
         {isLoading || !funnels ? (
           <div className="space-y-4">

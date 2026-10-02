@@ -1,7 +1,7 @@
 "use client";
 
 import { useExtracted } from "next-intl";
-import { ChevronDown, ChevronUp, Copy, Edit, MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Edit, MoreHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { DateTime } from "luxon";
 import { useMemo, useState } from "react";
 import { useDeleteGoal } from "../../../../api/analytics/hooks/goals/useDeleteGoal";
@@ -31,6 +31,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 import { formatChartDateTime } from "../../../../lib/dateTimeUtils";
 import { getTimezone, useStore } from "../../../../lib/store";
+import { useGetSite } from "../../../../api/admin/hooks/useSites";
+import { GoalFixer } from "./GoalFixer";
 import GoalFormModal from "./GoalFormModal";
 import { GoalBarChartSkeleton } from "./skeleton";
 
@@ -184,6 +186,8 @@ export default function GoalCard({ goal, siteId, timeSeries, isLoadingTimeSeries
   };
 
   const propertyFilters = resolvePropertyFilters(goal.config);
+  const { data: siteData } = useGetSite(siteId);
+  const [isFixing, setIsFixing] = useState(false);
 
   const allSessions = sessionsData || [];
   const hasNextPage = allSessions.length > LIMIT;
@@ -289,6 +293,26 @@ export default function GoalCard({ goal, siteId, timeSeries, isLoadingTimeSeries
             </Tooltip>
           </div>
         </div>
+
+        {/* Below the header row, not inside it: as a fourth column the stats
+            sparkline sits on top of this and swallows the click. */}
+        {(goal.total_conversions === 0 || isFixing) && (
+          <div onClick={e => e.stopPropagation()} className="px-4 pb-3">
+            {isFixing && siteData?.organizationId ? (
+              <GoalFixer siteId={siteId} organizationId={siteData.organizationId} goal={goal} />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/60 dark:bg-amber-950/30">
+                <p className="min-w-0 flex-1 text-xs text-amber-800 dark:text-amber-300">
+                  {t("No conversions in the selected range.")}
+                </p>
+                <Button type="button" size="sm" variant="outline" onClick={() => setIsFixing(true)}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("Find what to track instead")}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="relative">
           <div className="bg-neutral-100 dark:bg-neutral-700 h-1.5 w-full absolute bottom-0 left-0"></div>
           <div

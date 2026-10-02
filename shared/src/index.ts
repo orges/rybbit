@@ -1,5 +1,6 @@
 export * from "./botSignalContract";
 export * from "./dashboards";
+export * from "./dashboardExamples";
 export * from "./filters";
 export * from "./params";
 export * from "./scopes";
