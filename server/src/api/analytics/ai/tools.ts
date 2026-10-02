@@ -189,6 +189,7 @@ const compactRows = (rows: ToolRow[]) => rows.map(row => Object.fromEntries(Obje
  * crosses the wire, and what is stored per message forever.
  */
 const MAX_CHART_POINTS = 2_000;
+const MAX_SESSIONS = 20;
 
 const percentChange = (current: number, previous: number) =>
   previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : undefined;
@@ -599,21 +600,32 @@ const getErrorEvents: AnalystTool = {
     const message = z.string().min(1).max(2000).safeParse(args.error_message);
     if (!message.success) throw new Error("error_message is required, exactly as get_errors returned it");
     const range = rangeFor(args, ctx);
+    // One row past the cap, so "there are more" is known rather than inferred.
+    // Asked how many visitors an error hit, this used to answer with the number
+    // of rows it happened to return, and the session list was cut to twenty with
+    // no mention of it, so the model had to spot the mismatch itself and say
+    // "this is not a complete list". A lucky catch is not a guarantee.
+    const limit = Math.min(Number(args.limit ?? 20), 50);
     const rows = await query<ToolRow>({
       query: buildErrorEventsQuery(
-        { ...baseParams(ctx, range), errorMessage: message.data, limit: Math.min(Number(args.limit ?? 20), 50) },
+        { ...baseParams(ctx, range), errorMessage: message.data, limit: limit + 1 },
         ctx.siteId
       ),
       params: { siteId: ctx.siteId, errorMessage: message.data },
     });
+    const capped = rows.length > limit;
+    const listed = capped ? rows.slice(0, limit) : rows;
+    const sessionIds = [...new Set(listed.map(row => String(row.session_id ?? "")).filter(Boolean))];
     return {
       text: JSON.stringify({
         range: range.label,
         error_message: message.data,
-        count: rows.length,
-        sessions: [...new Set(rows.map(row => String(row.session_id ?? "")).filter(Boolean))].slice(0, 20),
+        listed: listed.length,
+        ...(capped ? { more_exist: true } : {}),
+        sessions: sessionIds.slice(0, MAX_SESSIONS),
+        ...(sessionIds.length > MAX_SESSIONS ? { sessions_shown: MAX_SESSIONS, more_sessions_exist: true } : {}),
       }),
-      rows,
+      rows: listed,
       // The stack and the message repeat on every row; the model needs the page,
       // the session and the context, not the same text twenty times.
       preview: { columns: ["timestamp", "message", "session_id", "hostname", "pathname", "country", "browser", "device_type"], limit: 20 },
