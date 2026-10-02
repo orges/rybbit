@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ALLOWED_PROPS, digestForModel, digestSession, type SessionDigest, type TimelineRow } from "./sessionDigest.js";
-import { SESSION_TOOLS, windowFor } from "./sessionTools.js";
+import { buildSessionTimelineQuery, SESSION_TOOLS, windowFor } from "./sessionTools.js";
 import type { ToolContext } from "./tools.js";
 import { validateFilters } from "../utils/query-validation.js";
 
@@ -222,6 +222,18 @@ describe("the gate", () => {
 });
 
 describe("reading a session in a window", () => {
+  it("does not alias its output over the column its time clause filters on", () => {
+    // Regression, and it was silent. ClickHouse resolves a bare `timestamp` in
+    // the time clause to the SELECT alias, so `timestamp <= toTimeZone(now64(3))`
+    // became milliseconds compared against a DateTime and matched nothing. Every
+    // bounded read came back as "no interaction events" while all_time worked,
+    // which read like a range problem rather than a query one.
+    const query = buildSessionTimelineQuery("AND timestamp >= toDateTime('2026-07-05')");
+    expect(query).toContain("AS event_ts");
+    expect(query).not.toMatch(/AS\s+timestamp\b/i);
+    expect(query).toContain("timestamp_ms");
+  });
+
   it("defaults to a wide range, because a session id carries no date", () => {
     // Shaped like the real one Ask sends: today's range, with both bounds. An
     // earlier version of this test omitted startDate, so it took the branch that

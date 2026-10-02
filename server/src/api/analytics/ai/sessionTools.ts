@@ -8,7 +8,7 @@ import type { AnalystTool, ToolContext } from "./tools.js";
 /** Matches the other tools: a session is read in a range, chosen server-side. */
 const timeShape = {
   type: "object",
-  description: "When to look for the session. A session id carries no date, so without this the dashboard's current range is used and older sessions are unreachable. Defaults to the last 90 days.",
+  description: "When to look for the session. Leave it out unless the user named a period: a session id carries no date, so the reader starts at a wide range and finds the session first time.",
   properties: {
     preset: { type: "string", enum: ["today", "yesterday", "last_7_days", "last_14_days", "last_30_days", "last_90_days", "this_month", "last_month", "all_time"] },
     start_date: { type: "string", description: "Inclusive start date, YYYY-MM-DD" },
@@ -60,9 +60,17 @@ const MAX_SESSIONS = 20;
  * session started, and the result reads as a journey that never happened. The
  * range still applies, so the model can bound it.
  */
-const buildSessionTimelineQuery = (timeStatement: string) => `
+/**
+ * The `timestamp` column cannot be used as an output alias here. ClickHouse
+ * resolves a bare `timestamp` in the time clause to the SELECT alias, so
+ * `timestamp <= toTimeZone(now64(3), …)` silently becomes a comparison of
+ * milliseconds against a DateTime and matches nothing — no error, just an empty
+ * digest reported as "no interaction events". Only bounded ranges were affected,
+ * which is why an all-time read worked and every 90-day one came back empty.
+ */
+export const buildSessionTimelineQuery = (timeStatement: string) => `
   SELECT
-    toUnixTimestamp64Milli(timestamp_ms) AS timestamp,
+    toUnixTimestamp64Milli(timestamp_ms) AS event_ts,
     type,
     event_name,
     pathname,
@@ -80,7 +88,7 @@ function toTimelineRow(item: unknown): TimelineRow {
   const row = sanitizeUntrustedValue((item ?? {}) as Record<string, unknown>) as Record<string, unknown>;
   const props = row.props && typeof row.props === "object" ? (row.props as Record<string, unknown>) : null;
   return {
-    timestamp: Number(row.timestamp ?? 0),
+    timestamp: Number(row.event_ts ?? 0),
     type: String(row.type ?? ""),
     event_name: row.event_name == null ? undefined : String(row.event_name),
     pathname: row.pathname == null ? undefined : String(row.pathname),
