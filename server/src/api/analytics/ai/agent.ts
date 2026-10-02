@@ -10,6 +10,7 @@ import { buildSystemPrompt, toolSchemas, type AnalystContext } from "./prompt.js
 import { ALL_TOOLS, ResultStore, type Artifact } from "./presentation.js";
 import { toolFailure, type AnalystTool, type ToolContext, type ToolProposal } from "./tools.js";
 import { unsupportedFigures } from "./verify.js";
+import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
 
 /**
  * The analyst's tool loop.
@@ -211,12 +212,18 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
             ? JSON.stringify({ result_id: stored.id, columns, ...safeParse(output.text) })
             : output.text;
           if (output.artifact) {
-            record.artifact = output.artifact;
+            // An artifact is persisted into the transcript's JSON, and ClickHouse
+            // pads FixedString columns with NUL — an unknown country arrives as
+            // two NUL bytes. One in an artifact is enough for Postgres to reject
+            // the whole message, which loses the answer the reader just watched
+            // stream in: the tool rows are sanitized, the artifact was not.
+            const artifact = sanitizeUntrustedValue(output.artifact) as Artifact;
+            record.artifact = artifact;
             // Models repeat themselves; the same chart twice is a scroll of
             // duplicated weight for the reader, not more information.
-            if (!result.artifacts.some(artifact => isSameArtifact(artifact, output.artifact!))) {
-              result.artifacts.push(output.artifact);
-              emit({ type: "artifact", artifact: output.artifact });
+            if (!result.artifacts.some(existing => isSameArtifact(existing, artifact))) {
+              result.artifacts.push(artifact);
+              emit({ type: "artifact", artifact });
             }
           }
           // A proposal wins over any later one: the first thing the model
