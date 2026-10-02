@@ -23,6 +23,10 @@ import {
   updateAdminSubscriptionOverride,
 } from "./api/admin/index.js";
 import {
+  analystChat,
+  analystSuggest,
+  handleConversations,
+  handleMemories,
   createAnnotation,
   createDashboard,
   createSegment,
@@ -213,6 +217,7 @@ import { lifecycleEmailService } from "./services/lifecycleEmails/lifecycleEmail
 import { telemetryService } from "./services/telemetryService.js";
 import { handleIdentify } from "./services/tracker/identifyService.js";
 import { trackEvent } from "./services/tracker/trackEvent.js";
+import { withRateLimit } from "./lib/withRateLimit.js";
 import { startSiteBaselineRefresh } from "./services/tracker/botBlocking/siteBaseline.js";
 import { usageService } from "./services/usageService.js";
 import { unclaimedSiteCleanupService } from "./services/sites/unclaimedSiteCleanupService.js";
@@ -319,10 +324,12 @@ const orgSqlRead = orgMemberScoped("sql", "read");
 // one query per card), and /generate spends OpenRouter credit. Cap per user.
 const customQueryRateLimit = { max: 60, timeWindow: "1 minute" };
 const generateQueryRateLimit = { max: 20, timeWindow: "1 minute" };
-const withRateLimit = <T extends { preHandler: unknown }>(opts: T, limit: { max: number; timeWindow: string }) => ({
-  ...opts,
-  config: { rateLimit: limit },
-});
+// An analyst request is not one query: the agent loop runs up to twelve of them
+// plus a model call, so it gets its own budget rather than the generate-SQL one,
+// which is sized for a single cheap statement.
+const analystRateLimit = { max: 10, timeWindow: "1 minute" };
+// Routes declare a cap as `config.rateLimit`; withRateLimit attaches it to an
+// existing auth chain without sharing that chain's pre-handler array.
 const orgOrgRead = orgMemberScoped("org", "read");
 const orgAdminSitesWrite = orgAdminScoped("sites", "write");
 const orgAdminOrgWrite = orgAdminScoped("org", "write");
@@ -529,6 +536,35 @@ async function analyticsRoutes(fastify: FastifyInstance) {
     withRateLimit(orgSqlRead, generateQueryRateLimit),
     generateCustomQuery
   );
+  fastify.post(
+    "/organizations/:organizationId/analytics/chat",
+    withRateLimit(orgSqlRead, analystRateLimit),
+    analystChat
+  );
+  fastify.post(
+    "/organizations/:organizationId/analytics/suggest",
+    withRateLimit(orgSqlRead, analystRateLimit),
+    analystSuggest
+  );
+  fastify.get("/organizations/:organizationId/analytics/conversations", orgSqlRead, handleConversations);
+  fastify.get(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleConversations
+  );
+  fastify.patch(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleConversations
+  );
+  fastify.delete(
+    "/organizations/:organizationId/analytics/conversations/:conversationId",
+    orgSqlRead,
+    handleConversations
+  );
+  fastify.get("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
+  fastify.post("/organizations/:organizationId/analytics/memories", orgSqlRead, handleMemories);
+  fastify.delete("/organizations/:organizationId/analytics/memories/:memoryId", orgSqlRead, handleMemories);
   fastify.get("/sites/:siteId/performance/overview", publicAnalyticsRead, getPerformanceOverview);
   fastify.get("/sites/:siteId/performance/time-series", publicAnalyticsRead, getPerformanceTimeSeries);
   fastify.get("/sites/:siteId/performance/by-dimension", publicAnalyticsRead, getPerformanceByDimension);

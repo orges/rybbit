@@ -115,7 +115,7 @@ export const getRetention = analyticsRoute<GetRetentionRequest>(
 );
 
 // Process raw retention data into a grid-friendly format
-function processRetentionData(rawData: RetentionDataRow[]): Omit<ProcessedRetentionData, "mode" | "range"> {
+export function processRetentionData(rawData: RetentionDataRow[]): Omit<ProcessedRetentionData, "mode" | "range"> {
   if (!rawData || rawData.length === 0) {
     return { cohorts: {}, maxPeriods: 0 };
   }

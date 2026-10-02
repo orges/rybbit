@@ -3,7 +3,8 @@
 import { useMeasure, useMediaQuery } from "@uidotdev/usehooks";
 import { Video } from "lucide-react";
 import { useExtracted } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import { useShallow } from "zustand/react/shallow";
 import { useGetSessionReplays } from "../../../api/analytics/hooks/sessionReplay/useGetSessionReplays";
 import { DisabledOverlay } from "../../../components/DisabledOverlay";
@@ -36,6 +37,16 @@ export default function SessionReplayPage() {
   // replay opens the fullscreen drawer (player + timeline) instead.
   const isCompact = useMediaQuery("(max-width: 767px)");
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ?session= makes a replay link shareable, and is how Ask sends someone to
+  // the exact session it found rather than to the list.
+  const [sessionParam] = useQueryState("session", parseAsString);
+  const setSessionId = useReplayStore(s => s.setSessionId);
+  useEffect(() => {
+    if (!sessionParam) return;
+    setSessionId(sessionParam);
+    if (isCompact) setMobileOpen(true);
+  }, [isCompact, sessionParam, setSessionId]);
 
   const [playerRef, { width: playerWidth, height: playerHeight }] = useMeasure();
 

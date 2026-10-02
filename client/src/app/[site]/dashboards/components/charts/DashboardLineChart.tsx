@@ -5,9 +5,11 @@ import { useMemo } from "react";
 import type { CustomQueryRow } from "@/api/analytics/endpoints";
 import { TimeSeriesChart, type TimeSeriesChartSeries } from "@/components/charts/TimeSeriesChart";
 import { getChartTimeBounds } from "@/components/charts/timeSeriesChartUtils";
+import { DateTime } from "luxon";
 import { getTimezone, useStore } from "@/lib/store";
+import type { Time } from "@/components/DateSelector/types";
 import { formatter } from "@/lib/utils";
-import { buildChartAxis, buildWideData, parseChartDate } from "../../utils";
+import { buildChartAxis, buildWideData, inferChartBucket, parseChartDate } from "../../utils";
 import { CardLegend, ChartEmpty, DashboardTooltip, toCardSeries } from "./shared";
 
 type DashboardLineChartProps = {
@@ -15,6 +17,12 @@ type DashboardLineChartProps = {
   mapping: DashboardCardMapping;
   /** Fill the area beneath the line (single-series only). */
   area?: boolean;
+  /**
+   * The data carries its own time range, rather than being a view of the
+   * dashboard's. The axis is then read off the values and the domain is the
+   * data's, instead of the viewer's time selector.
+   */
+  standalone?: boolean;
 };
 
 type LinePoint = { x: Date; y: number; label: string };
@@ -24,12 +32,16 @@ type LinePoint = { x: Date; y: number; label: string };
 const SYNTH_EPOCH = Date.UTC(2000, 0, 1);
 const SYNTH_STEP = 86_400_000;
 
-export function DashboardLineChart({ rows, mapping, area = false }: DashboardLineChartProps) {
+export function DashboardLineChart({ rows, mapping, area = false, standalone = false }: DashboardLineChartProps) {
   const time = useStore(state => state.time);
-  const bucket = useStore(state => state.bucket);
+  const storeBucket = useStore(state => state.bucket);
   const timezone = getTimezone();
 
   const wide = useMemo(() => buildWideData(rows, mapping), [rows, mapping]);
+  const bucket = useMemo(
+    () => (standalone ? inferChartBucket(wide ? wide.data.map(entry => String(entry[wide.indexBy])) : []) : storeBucket),
+    [standalone, storeBucket, wide]
+  );
   const axis = useMemo(
     () => buildChartAxis(wide ? wide.data.map(entry => String(entry[wide.indexBy])) : [], bucket),
     [wide, bucket]
@@ -65,7 +77,7 @@ export function DashboardLineChart({ rows, mapping, area = false }: DashboardLin
 
     let chartMin: Date | undefined;
     let chartMax: Date | undefined;
-    if (axis.isTime) {
+    if (axis.isTime && !standalone) {
       const bounds = getChartTimeBounds(time, bucket, timezone);
       chartMin = bounds.min;
       chartMax = bounds.max;
@@ -81,13 +93,28 @@ export function DashboardLineChart({ rows, mapping, area = false }: DashboardLin
     }
 
     return { series, max: max || 1, chartMin, chartMax };
-  }, [wide, axis, time, bucket, timezone]);
+  }, [wide, axis, standalone, time, bucket, timezone]);
 
   if (!wide || series.length === 0 || series.every(item => item.data.length === 0)) {
     return <ChartEmpty />;
   }
 
   const multi = series.length > 1;
+
+  // A standalone chart has no dashboard range to label itself with, so it states
+  // the one its own points cover. No start/end times, so the ticks fall back to
+  // "Sep 19" rather than the time-of-day a dashboard would use.
+  const standaloneTime = useMemo(
+    () =>
+      chartMin && chartMax
+        ? ({
+            mode: "range",
+            startDate: DateTime.fromJSDate(chartMin, { zone: timezone }).toFormat("yyyy-MM-dd"),
+            endDate: DateTime.fromJSDate(chartMax, { zone: timezone }).toFormat("yyyy-MM-dd"),
+          } as Time)
+        : undefined,
+    [chartMin, chartMax, timezone]
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -100,6 +127,8 @@ export function DashboardLineChart({ rows, mapping, area = false }: DashboardLin
           max={max}
           chartMin={chartMin}
           chartMax={chartMax}
+          bucket={bucket}
+          {...(standaloneTime ? { time: standaloneTime } : {})}
           disableDragZoom
           yTickFormat={formatter}
           renderTooltip={({ point, points }) => {

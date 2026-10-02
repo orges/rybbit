@@ -1,0 +1,481 @@
+import { z } from "zod";
+import { ANALYST_TOOLS, type AnalystTool, type ToolOutput, type ToolRange, type ToolRow } from "./tools.js";
+
+/**
+ * Presentation tools: how the answer is drawn, not what it says.
+ *
+ * Every analytics tool parks its rows here and hands the model a `result_id`. The
+ * model then asks for a table or a chart *of that result*, so a rendered number
+ * always traces back to a real row set — the chart is a view of the query, never
+ * a number the model made up. The store lives for the length of one run; only
+ * the small artifact is persisted with the message.
+ */
+
+export interface StoredResult {
+  id: string;
+  rows: ToolRow[];
+  rowCount: number;
+  /** The analytics tool that produced the rows, not the one drawing them. */
+  source: string;
+  sql?: string;
+  /** The arguments the tool ran with — a funnel's steps, a retention's mode. */
+  input?: unknown;
+  /** The range the rows were actually computed over, when it is a fixed one. */
+  range?: { startDate: string; endDate: string };
+}
+
+export class ResultStore {
+  private readonly results = new Map<string, StoredResult>();
+
+  add(rows: ToolRow[] | undefined, source: string, options?: { sql?: string; input?: unknown; range?: ToolRange }): StoredResult | undefined {
+    if (!rows?.length) return undefined;
+    const id = `r${this.results.size + 1}`;
+    const range = options?.range;
+    const result: StoredResult = {
+      id,
+      rows,
+      rowCount: rows.length,
+      source,
+      ...(options?.sql ? { sql: options.sql } : {}),
+      ...(options?.input !== undefined ? { input: options.input } : {}),
+      ...(range?.startDate && range?.endDate ? { range: { startDate: range.startDate, endDate: range.endDate } } : {}),
+    };
+    this.results.set(id, result);
+    return result;
+  }
+
+  get(id: string) {
+    return this.results.get(id);
+  }
+
+  get size() {
+    return this.results.size;
+  }
+}
+
+export type Artifact =
+  | {
+      type: "chart";
+      title: string;
+      chartType: "bar" | "line" | "area" | "donut";
+      dimension: string;
+      metric: string;
+      points: Array<{ label: string; value: number; series?: string }>;
+      /** The window the points are over, so a link out of them lands in it. */
+      range?: { startDate: string; endDate: string };
+      source?: string;
+    }
+  | {
+      type: "table";
+      title: string;
+      columns: string[];
+      rows: string[][];
+      total: number;
+      truncated: boolean;
+      /** The window the rows are over, so a link out of them lands in it. */
+      range?: { startDate: string; endDate: string };
+      source?: string;
+    }
+  | {
+      type: "retention";
+      title: string;
+      mode: "day" | "week";
+      /** Cohort start date → the share of that cohort returning in each later period. */
+      cohorts: Record<string, { size: number; percentages: (number | null)[] }>;
+      maxPeriods: number;
+      source?: string;
+    }
+  | {
+      type: "funnel";
+      title: string;
+      /** The steps as they were asked for, so the funnel can label and expand them. */
+      steps: Array<{ type: "page" | "event"; value: string }>;
+      results: Array<{ step_number: number; step_name: string; sessions: number; conversion_rate: number; dropoff_rate: number }>;
+      /** The range the steps were counted over, so a drill-down asks for the same one. */
+      range?: { startDate: string; endDate: string };
+      /** The filters in effect then, for the same reason. */
+      filters?: unknown[];
+      source?: string;
+    }
+  | { type: "followups"; title: string; options: string[] }
+  | { type: "sql"; title: string; sql: string; rowCount: number };
+
+export interface PresentationOutput extends ToolOutput {
+  artifact?: Artifact;
+}
+
+const MAX_SERIES = 12;
+const MAX_TABLE_ROWS = 100;
+/**
+ * The most points a chart may carry. A point becomes an SVG node in the browser
+ * and a line in the artifact persisted with the message, so the cap belongs here
+ * as well as in the tool that produced the rows: this is the one place every
+ * chart passes through, whatever filled the result.
+ */
+const MAX_CHART_POINTS = 2_000;
+
+/** A label that is a point in time, so the order on the axis is chronological. */
+const TIME_LABEL = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/;
+
+const chartArgs = z.object({
+  result_id: z.string().min(1),
+  title: z.string().min(1).max(120),
+  type: z.enum(["bar", "line", "area", "donut"]),
+  dimension: z.string().min(1),
+  metric: z.string().min(1),
+  series: z.string().min(1).optional(),
+});
+
+const showChart: AnalystTool = {
+  name: "show_chart",
+  description:
+    "Draw a chart of a previous tool result. Pick the column that labels each point (`dimension`), the numeric column to plot (`metric`), and optionally a second column to split the points into series. Donut needs one point per label; a funnel is a bar of step_name against sessions, and a line of time against sessions is a trend.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string", description: "The result_id returned by the tool that produced the data" },
+      title: { type: "string" },
+      type: { type: "string", enum: ["bar", "line", "area", "donut"] },
+      dimension: { type: "string", description: "Column whose values label each point" },
+      metric: { type: "string", description: "Numeric column to plot" },
+      series: { type: "string", description: "Optional second dimension, drawn as one bar or line per value" },
+    },
+    required: ["result_id", "title", "type", "dimension", "metric"],
+  },
+  async run(args, ctx) {
+    const parsed = chartArgs.safeParse(args);
+    if (!parsed.success) throw new Error(`Invalid chart arguments: ${parsed.error.errors[0]?.message}`);
+    const { result_id, title, type, dimension, metric, series } = parsed.data;
+    const result = ctx.results.get(result_id);
+    if (!result) throw new Error(`No result ${result_id}. Use one of the result ids from the tools you already called.`);
+    const columns = Object.keys(result.rows[0] ?? {});
+    for (const column of [dimension, metric, ...(series ? [series] : [])]) {
+      if (!columns.includes(column)) {
+        throw new Error(`Column "${column}" is not in ${result_id}. Available columns: ${columns.join(", ")}`);
+      }
+    }
+    if (dimension === metric || (series && (series === dimension || series === metric))) {
+      throw new Error("dimension, metric and series must be different columns");
+    }
+    if (series && type === "donut") throw new Error("A donut has one value per slice; drop the series column");
+
+    let points = result.rows.map(row => ({
+      label: String(row[dimension] ?? "").slice(0, 120),
+      value: Number(row[metric]),
+      ...(series ? { series: String(row[series] ?? "").slice(0, 120) } : {}),
+    }));
+    // A bar chart of a ranking has to be ordered by the value it plots. Rows
+    // come back in whatever order the query produced, and a "top 6 pages" chart
+    // drawn in query order reads left to right as ascending — so the tallest
+    // bar is in the middle and the chart contradicts the sentence above it.
+    // Time is the exception: a chronological axis is the point.
+    if (type === "bar" && !series && !points.some(point => TIME_LABEL.test(point.label))) {
+      points = [...points].sort((left, right) => right.value - left.value);
+    }
+    if (type === "line" || type === "area") {
+      // Categories have no place on a time axis, and plotting them anyway draws
+      // the points against a synthetic 2000-01-01 domain that reads like a real
+      // trend. A bar chart is the honest visual for a ranked list.
+      const unparseable = points
+        .map(point => point.label)
+        .filter(label => !TIME_LABEL.test(label))
+        .slice(0, 3);
+      if (unparseable.length) {
+        throw new Error(
+          `A ${type} chart needs a time column, but "${dimension}" holds ${unparseable.map(label => `"${label}"`).join(", ")}. Use a bar chart, or chart against a date column.`
+        );
+      }
+    }
+    if (points.length < 2) throw new Error("A chart needs at least two rows of data");
+    if (points.length > MAX_CHART_POINTS) {
+      throw new Error(
+        `That result has ${points.length.toLocaleString("en-US")} rows, and a chart reads badly past ${MAX_CHART_POINTS}. Aggregate it more coarsely first — a wider time bucket, or fewer rows from the query.`
+      );
+    }
+    if (points.some(point => !Number.isFinite(point.value))) {
+      throw new Error(`Column "${metric}" must hold numbers on every row to be charted`);
+    }
+    const keys = new Set(points.map(point => `${point.label}\u0000${point.series ?? ""}`));
+    if (keys.size !== points.length) {
+      throw new Error(
+        `Each point needs a distinct "${dimension}" value. Aggregate in SQL or use another column so no two rows share a label.`
+      );
+    }
+    if (series && new Set(points.map(point => point.series)).size > MAX_SERIES) {
+      throw new Error(`At most ${MAX_SERIES} series; narrow the query or drop the series column`);
+    }
+    if (type === "donut" && points.every(point => point.value <= 0)) {
+      throw new Error("A donut needs at least one positive value");
+    }
+    const artifact: Artifact = {
+      type: "chart",
+      title,
+      chartType: type,
+      dimension,
+      metric,
+      points,
+      ...(result.range ? { range: result.range } : {}),
+      source: result.source,
+    };
+    return {
+      // Not "chart shown" — the model reads that back and narrates it. The
+      // highest point is the thing the answer should open with.
+      text: `Plotted ${points.length} points from ${result.source}. Highest: ${describeLeader(points)}.`,
+      artifact,
+    };
+  },
+};
+
+const tableArgs = z.object({
+  result_id: z.string().min(1),
+  title: z.string().min(1).max(120),
+  columns: z.array(z.string().min(1)).min(1).max(10).optional(),
+  limit: z.number().int().min(1).max(MAX_TABLE_ROWS).optional(),
+  sort_by: z.string().min(1).optional(),
+  sort_order: z.enum(["asc", "desc"]).optional(),
+});
+
+const showTable: AnalystTool = {
+  name: "show_table",
+  description:
+    "Show a table of a previous tool result. Use it when the answer is a ranked list, a comparison across rows, or anything a chart would hide.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string" },
+      title: { type: "string" },
+      columns: { type: "array", items: { type: "string" }, description: "Defaults to every column" },
+      limit: { type: "integer", minimum: 1, maximum: MAX_TABLE_ROWS, description: "Defaults to 25" },
+      sort_by: { type: "string" },
+      sort_order: { type: "string", enum: ["asc", "desc"] },
+    },
+    required: ["result_id", "title"],
+  },
+  async run(args, ctx) {
+    const parsed = tableArgs.safeParse(args);
+    if (!parsed.success) throw new Error(`Invalid table arguments: ${parsed.error.errors[0]?.message}`);
+    const { result_id, title, limit, sort_by, sort_order } = parsed.data;
+    const result = ctx.results.get(result_id);
+    if (!result) throw new Error(`No result ${result_id}. Use one of the result ids from the tools you already called.`);
+    const available = Object.keys(result.rows[0] ?? {});
+    const columns = parsed.data.columns ?? available;
+    for (const column of columns) {
+      if (!available.includes(column)) {
+        throw new Error(`Column "${column}" is not in ${result_id}. Available columns: ${available.join(", ")}`);
+      }
+    }
+    if (sort_by && !available.includes(sort_by)) throw new Error(`Column "${sort_by}" is not in ${result_id}`);
+
+    const rows = [...result.rows];
+    if (sort_by) {
+      const direction = sort_order === "asc" ? 1 : -1;
+      rows.sort((a, b) => {
+        const left = a[sort_by];
+        const right = b[sort_by];
+        if (typeof left === "number" && typeof right === "number") return (left - right) * direction;
+        return String(left ?? "").localeCompare(String(right ?? "")) * direction;
+      });
+    }
+    const take = Math.min(limit ?? 25, MAX_TABLE_ROWS);
+    const artifact: Artifact = {
+      type: "table",
+      title,
+      columns,
+      rows: rows.slice(0, take).map(row => columns.map(column => formatCell(row[column]))),
+      total: rows.length,
+      truncated: rows.length > take,
+      ...(result.range ? { range: result.range } : {}),
+      source: result.source,
+    };
+    return { text: `Showing ${Math.min(take, rows.length)} of ${rows.length} rows from ${result.source}.`, artifact };
+  },
+};
+
+const formatCell = (value: unknown) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") return String(Math.round(value * 1000) / 1000);
+  if (typeof value === "object") return JSON.stringify(value).slice(0, 300);
+  return String(value).slice(0, 300);
+};
+
+/** A chart, a table and a grid are three shapes of the same rows. */
+const noSuchResult = (id: string) =>
+  new Error(`No result ${id}. Use one of the result ids from the tools you already called.`);
+const noSuchColumns = (id: string, missing: string[], available: string[]) =>
+  new Error(`Result ${id} is missing ${missing.join(" and ")}. Available columns: ${available.join(", ")}`);
+
+const grouped = (value: number) =>
+  value.toLocaleString("en-US", { maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0 });
+
+/** The point an answer should open with: the largest one, and how big it is. */
+function describeLeader(points: Array<{ label: string; value: number; series?: string }>) {
+  const best = [...points].sort((left, right) => right.value - left.value)[0];
+  if (!best) return "none";
+  return `${best.label} (${grouped(best.value)}${best.series ? ` of ${best.series}` : ""})`;
+}
+
+function describeFunnel(results: Array<{ step_name: string; sessions: number; conversion_rate: number }>) {
+  const first = results[0];
+  const last = results[results.length - 1];
+  if (!first || !last) return "";
+  const conversion = first.sessions > 0 ? Math.round((last.sessions / first.sessions) * 1000) / 10 : 0;
+  return `${grouped(first.sessions)} sessions entered at ${first.step_name}, ${grouped(last.sessions)} reached ${last.step_name} — ${conversion}% overall.`;
+}
+
+const resultOf = (id: string, ctx: { results: ResultStore }) => {
+  const result = ctx.results.get(id);
+  if (!result) throw noSuchResult(id);
+  return result;
+};
+
+const MAX_COHORTS = 12;
+const MAX_PERIODS = 8;
+
+const showRetention: AnalystTool = {
+  name: "show_retention",
+  description:
+    "Draw the cohorts of a get_retention result: one line per cohort, the share of it still returning in each later period. Use this for a retention answer instead of show_chart or show_table — retention is a cohort over time, not a ranking, and the columns do not chart as a ranking.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string", description: "The result_id get_retention returned" },
+      title: { type: "string" },
+    },
+    required: ["result_id", "title"],
+  },
+  async run(args, ctx) {
+    const parsed = z.object({ result_id: z.string().min(1), title: z.string().min(1).max(120) }).safeParse(args);
+    if (!parsed.success) throw new Error("show_retention needs a result_id and a title");
+    const result = resultOf(parsed.data.result_id, ctx);
+    const available = Object.keys(result.rows[0] ?? {});
+    const missing = ["cohort_period", "period_difference", "retention_percentage"].filter(column => !available.includes(column));
+    if (missing.length) throw noSuchColumns(result.id, missing, available);
+
+    // A grid, read back into the shape the retention page's own chart expects.
+    const cells: Record<string, { size: number; percentages: (number | null)[] }> = {};
+    let maxPeriods = 0;
+    for (const row of result.rows) {
+      const cohort = String(row.cohort_period ?? "");
+      const period = Number(row.period_difference);
+      const retained = Number(row.retention_percentage);
+      if (!cohort || !Number.isFinite(period) || period < 0) continue;
+      const entry = (cells[cohort] ??= { size: Number(row.cohort_size) || 0, percentages: [] });
+      entry.percentages[period] = Number.isFinite(retained) ? Math.round(retained * 100) / 100 : null;
+      maxPeriods = Math.max(maxPeriods, period + 1);
+    }
+    const newestFirst = Object.keys(cells).sort((a, b) => b.localeCompare(a)).slice(0, MAX_COHORTS);
+    if (!newestFirst.length) throw new Error(`Result ${result.id} has no cohort rows. Call get_retention first.`);
+
+    const cohorts = Object.fromEntries(
+      newestFirst.map(cohort => [
+        cohort,
+        {
+          size: cells[cohort].size,
+          percentages: Array.from({ length: Math.min(maxPeriods, MAX_PERIODS) }, (_, period) => cells[cohort].percentages[period] ?? null),
+        },
+      ])
+    );
+    const mode = (result.input as { mode?: string } | undefined)?.mode === "week" ? "week" : "day";    const largest = Object.entries(cohorts).sort((a, b) => b[1].size - a[1].size)[0];
+    const largestCohort = largest ? `${largest[0]} (${grouped(largest[1].size)} users)` : "none";
+    const artifact: Artifact = {
+      type: "retention",
+      title: parsed.data.title,
+      mode,
+      cohorts,
+      maxPeriods: Math.min(maxPeriods, MAX_PERIODS),
+      source: result.source,
+    };
+    return {
+      text: `Drew ${newestFirst.length} cohorts over up to ${artifact.maxPeriods} periods from ${result.source}. Largest cohort: ${largestCohort}.`,
+      artifact,
+    };
+  },
+};
+
+const showFunnel: AnalystTool = {
+  name: "show_funnel",
+  description:
+    "Draw a get_funnel result as a funnel: one bar per step in order, with the sessions that reached it, the conversion from the previous step and the drop-off. Use this instead of charting step_name against sessions, which loses the order and both rates.",
+  parameters: {
+    type: "object",
+    properties: {
+      result_id: { type: "string", description: "The result_id get_funnel returned" },
+      title: { type: "string" },
+    },
+    required: ["result_id", "title"],
+  },
+  async run(args, ctx) {
+    const parsed = z.object({ result_id: z.string().min(1), title: z.string().min(1).max(120) }).safeParse(args);
+    if (!parsed.success) throw new Error("show_funnel needs a result_id and a title");
+    const result = resultOf(parsed.data.result_id, ctx);
+    const available = Object.keys(result.rows[0] ?? {});
+    const required = ["step_number", "step_name", "sessions", "conversion_rate", "dropoff_rate"];
+    const missing = required.filter(column => !available.includes(column));
+    if (missing.length) throw noSuchColumns(result.id, missing, available);
+
+    // The step definitions came from the tool's own arguments, not the rows.
+    const steps = z
+      .array(z.object({ type: z.enum(["page", "event"]), value: z.string().min(1).max(500) }))
+      .min(2)
+      .safeParse((result.input as { steps?: unknown } | undefined)?.steps);
+    if (!steps.success) throw new Error(`Result ${result.id} did not come from get_funnel. Call get_funnel with the steps you want first.`);
+
+    const filters = (ctx.filters ?? []) as unknown[];
+    const results = [...result.rows]
+      .map(row => ({
+        step_number: Number(row.step_number),
+        step_name: String(row.step_name ?? ""),
+        sessions: Number(row.sessions) || 0,
+        conversion_rate: Number(row.conversion_rate) || 0,
+        dropoff_rate: Number(row.dropoff_rate) || 0,
+      }))
+      .sort((left, right) => left.step_number - right.step_number);
+    const artifact: Artifact = {
+      type: "funnel",
+      title: parsed.data.title,
+      steps: steps.data,
+      results,
+      ...(result.range ? { range: result.range } : {}),
+      ...(filters.length ? { filters } : {}),
+      source: result.source,
+    };
+    return {
+      // The first and last step are the whole point of a funnel, so hand those
+      // over rather than a count the model will narrate.
+      text: `Drew ${results.length} steps from ${result.source}. ${describeFunnel(results)}.`,
+      artifact,
+    };
+  },
+};
+
+const suggestFollowups: AnalystTool = {
+  name: "suggest_followups",
+  description:
+    "End an analysis by offering the questions that follow from it. Call this as the final tool of any answer that found something, with 2 to 4 questions drawn from what the data actually showed — a page that stands out, a period to compare against, the same question on another dimension. Every question must be one you could answer with a tool. Skip it only when the answer was a single figure or the data was empty.",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "A short label, such as \"Dig deeper\"" },
+      options: { type: "array", items: { type: "string" }, description: "2 to 4 complete questions" },
+    },
+    required: ["title", "options"],
+  },
+  async run(args) {
+    const parsed = z
+      .object({ title: z.string().min(1).max(60), options: z.array(z.string().min(4).max(120)).min(2).max(4) })
+      .safeParse(args);
+    if (!parsed.success) throw new Error("Give a title and 2 to 4 questions of a few words each");
+    return {
+      // Rendered under the answer, so there is nothing to tell the model except
+      // the questions themselves. A sentence here becomes a sentence in the
+      // answer ("I recorded 3 follow-up questions"), which is noise.
+      text: JSON.stringify({ follow_ups: parsed.data.options }),
+      artifact: { type: "followups", title: parsed.data.title, options: parsed.data.options },
+    };
+  },
+};
+
+export const PRESENTATION_TOOLS: AnalystTool[] = [showChart, showTable, showRetention, showFunnel, suggestFollowups];
+
+/** Every tool the agent can actually run, keyed by the name the model calls. */
+export const ALL_TOOLS = new Map([...ANALYST_TOOLS, ...PRESENTATION_TOOLS].map(tool => [tool.name, tool]));

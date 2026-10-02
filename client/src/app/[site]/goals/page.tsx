@@ -2,6 +2,7 @@
 
 import { useExtracted } from "next-intl";
 import { useMemo, useState } from "react";
+import { useGetSite } from "../../../api/admin/hooks/useSites";
 import { useGetGoalTimeSeries } from "../../../api/analytics/hooks/goals/useGetGoalTimeSeries";
 import { useGetGoals } from "../../../api/analytics/hooks/goals/useGetGoals";
 import { GoalTimeSeriesPoint } from "../../../api/analytics/endpoints";
@@ -14,6 +15,7 @@ import { useStore } from "../../../lib/store";
 import { GOALS_PAGE_FILTERS } from "../../../lib/filterGroups";
 import { SubHeader } from "../components/SubHeader/SubHeader";
 import CreateGoalButton from "./components/CreateGoalButton";
+import { GoalCopilot } from "./components/GoalCopilot";
 import GoalsList from "./components/GoalsList";
 import { Target } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,7 @@ export default function GoalsPage() {
   useSetPageTitle("Goals");
 
   const { site } = useStore();
+  const { data: siteData } = useGetSite(Number(site));
   const [searchQuery, setSearchQuery] = useState("");
   const [pagination, setPagination] = useState({
     pageIndex: 0, // TablePagination uses 0-based indexing
@@ -183,6 +186,9 @@ export default function GoalsPage() {
           </div>
           <CreateGoalButton siteId={Number(site)} />
         </div>
+        {siteData?.organizationId && (
+          <GoalCopilot siteId={Number(site)} organizationId={siteData.organizationId} />
+        )}
         {/* if site is not loaded, show skeleton */}
         {isLoading || !site ? (
           <div className="space-y-3">

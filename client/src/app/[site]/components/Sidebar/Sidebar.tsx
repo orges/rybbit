@@ -14,6 +14,7 @@ import {
   MousePointerClick,
   Rewind,
   Settings,
+  Sparkles,
   Split,
   Target,
   User,
@@ -102,6 +103,14 @@ function SidebarContent() {
             active={isActiveTab("bots")}
             href={getTabPath("bots")}
             icon={<Bot className="w-4 h-4" />}
+          />
+        )}
+        {!embed && !privateKey && (IS_CLOUD || DEPLOYMENT) && (
+          <SidebarComponents.Item
+            label={t("Ask")}
+            active={isActiveTab("ask")}
+            href={getTabPath("ask")}
+            icon={<Sparkles className="w-4 h-4" />}
           />
         )}
         <SidebarComponents.SectionHeader>{t("Behavior")}</SidebarComponents.SectionHeader>
