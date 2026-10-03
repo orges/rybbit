@@ -1,0 +1,14 @@
+[Unit]
+Description=Prune dangling Docker images left behind by Rybbit builds
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Dangling (untagged) images only: the running version and any tagged rollback
+# target are kept. `until=24h` keeps an image built earlier the same day in
+# case a deploy is being debugged.
+ExecStart=/usr/bin/docker image prune --force --filter until=24h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

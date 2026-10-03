@@ -42,5 +42,13 @@ else
   docker compose --profile with-webserver up -d --force-recreate
 fi
 
+# Drop the images the previous version left behind. Each update otherwise
+# strands one backend and one client image, which accumulate until the disk
+# fills. Only untagged images are removed, so the version now running and any
+# tagged rollback target are kept. A failure here must not turn a successful
+# update into a failed one.
+echo "Pruning images left by the previous version..."
+docker image prune --force || echo "Warning: image prune failed; run 'docker image prune -f' by hand."
+
 echo "Update complete. Services are running with the latest version."
 echo "You can monitor logs with: docker compose logs -f" 

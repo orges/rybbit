@@ -1,9 +1,19 @@
+# Bound container log growth. Without a cap, one service logging heavily (for
+# example ClickHouse printing stack traces once the disk is under pressure) can
+# fill the host disk and take every other service down with it.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   caddy:
     profiles: ["with-webserver"]
     image: caddy:2.10.0
     container_name: caddy
     restart: unless-stopped
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"
@@ -49,6 +59,7 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    logging: *logging
     ports:
       # Localhost-only: reach from outside via SSH tunnel (ssh -N -L 8123:localhost:8123 <host>)
       - "127.0.0.1:8123:8123"
@@ -69,6 +80,7 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    logging: *logging
     ports:
       # Localhost-only: reach from outside via SSH tunnel
       - "127.0.0.1:5432:5432"
@@ -88,6 +100,7 @@ services:
       retries: 5
       start_period: 5s
     restart: unless-stopped
+    logging: *logging
     # Backs session tracking, sticky identity, and bot-anomaly counters.
     # noeviction keeps those keys from being dropped under memory pressure;
     # session keys carry a 30-minute TTL so memory stays bounded by active-user
@@ -153,6 +166,7 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    logging: *logging
 
   client:
     image: ghcr.io/rybbit-io/rybbit-client:${IMAGE_TAG:-latest}
@@ -176,6 +190,7 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   clickhouse-data:
