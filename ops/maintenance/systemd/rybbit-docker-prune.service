@@ -5,10 +5,10 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-# Dangling (untagged) images only: the running version and any tagged rollback
-# target are kept. `until=24h` keeps an image built earlier the same day in
-# case a deploy is being debugged.
-ExecStart=/usr/bin/docker image prune --force --filter until=24h
+# Dangling (untagged) images only: the version now running and any tagged
+# rollback target are kept. A successful build tags its own image, so anything
+# dangling here is a leftover layer rather than something worth restoring.
+ExecStart=/usr/bin/docker image prune --force
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
