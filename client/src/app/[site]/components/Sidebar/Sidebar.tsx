@@ -68,6 +68,8 @@ function SidebarContent() {
     return route === tabName.toLowerCase();
   };
 
+  const cloudUi = IS_CLOUD || !!DEPLOYMENT;
+
   return (
     <div className="w-56 bg-neutral-50 border-r border-neutral-150 dark:bg-neutral-900 dark:border-neutral-850 flex flex-col h-dvh">
       <div className="flex flex-col p-3 border-b border-neutral-200 dark:border-neutral-800">
@@ -83,7 +85,7 @@ function SidebarContent() {
           />
         </div>
         <SidebarComponents.SectionHeader>{t("Traffic")}</SidebarComponents.SectionHeader>
-        {IS_CLOUD && (
+        {cloudUi && (
           <SidebarComponents.Item
             label={t("Pages")}
             active={isActiveTab("pages")}
@@ -97,7 +99,7 @@ function SidebarContent() {
           href={getTabPath("globe")}
           icon={<Globe2 className="w-4 h-4" />}
         />
-        {IS_CLOUD && (
+        {cloudUi && (
           <SidebarComponents.Item
             label={t("Bots")}
             active={isActiveTab("bots")}
@@ -105,7 +107,7 @@ function SidebarContent() {
             icon={<Bot className="w-4 h-4" />}
           />
         )}
-        {!embed && !privateKey && (IS_CLOUD || DEPLOYMENT) && (
+        {!embed && !privateKey && cloudUi && (
           <SidebarComponents.Item
             label={t("Ask")}
             active={isActiveTab("ask")}
@@ -193,7 +195,7 @@ function SidebarContent() {
           href={getTabPath("errors")}
           icon={<AlertTriangle className="w-4 h-4" />}
         />
-        {IS_CLOUD && !isMobileSite && (
+        {cloudUi && !isMobileSite && (
           <SidebarComponents.Item
             label={t("Performance")}
             active={isActiveTab("performance")}
@@ -202,7 +204,7 @@ function SidebarContent() {
           />
         )}
         {/* API Playground is desktop-only, so on self-hosted builds without Query/Dashboards the header must hide with it */}
-        <div className={IS_CLOUD || DEPLOYMENT ? undefined : "hidden md:block"}>
+        <div className={cloudUi ? undefined : "hidden md:block"}>
           <SidebarComponents.SectionHeader>{t("Explore")}</SidebarComponents.SectionHeader>
         </div>
         <div className="hidden md:block">
@@ -213,7 +215,7 @@ function SidebarContent() {
             icon={<Code className="w-4 h-4" />}
           />
         </div>
-        {(IS_CLOUD || DEPLOYMENT) && (
+        {cloudUi && (
           <>
             <SidebarComponents.Item
               label={t("Query")}
