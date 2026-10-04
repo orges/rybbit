@@ -1,13 +1,19 @@
 "use client";
 
-import type { CustomQueryRow } from "@/api/analytics/endpoints";
+import type { CustomQueryRow, ProcessedRetentionData } from "@/api/analytics/endpoints";
 import type { AnalystArtifact } from "@/api/analyst/endpoints/analyst";
 import { DashboardBarChart } from "@/app/[site]/dashboards/components/charts/DashboardBarChart";
 import { DashboardLineChart } from "@/app/[site]/dashboards/components/charts/DashboardLineChart";
 import { DashboardPie } from "@/app/[site]/dashboards/components/charts/DashboardPie";
 import { Funnel as FunnelSteps } from "@/app/[site]/funnels/components/Funnel";
-import { RetentionChart } from "@/app/[site]/retention/RetentionChart";
+import { computeFunnelMetrics } from "@/app/[site]/funnels/components/funnelMetrics";
+import { RetentionCard } from "@/app/[site]/retention/RetentionCard";
+import { buildRetentionModel, periodDays } from "@/app/[site]/retention/retentionModel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useDateTimeFormat } from "@/hooks/useDateTimeFormat";
+import { useExtracted } from "next-intl";
+import { DateTime } from "luxon";
+import { useCallback, useMemo, useState } from "react";
 import { SESSION_COLUMN, TIMESTAMP_COLUMN, asUtcIso, type ResultLink } from "./links";
 
 /**
@@ -52,7 +58,11 @@ function Chart({ artifact }: { artifact: ChartArtifact }) {
           rows={rows}
           area={artifact.chartType === "area"}
           standalone
-          mapping={{ xColumn: artifact.dimension, yColumns: [artifact.metric], ...(seriesColumn ? { seriesColumn } : {}) }}
+          mapping={{
+            xColumn: artifact.dimension,
+            yColumns: [artifact.metric],
+            ...(seriesColumn ? { seriesColumn } : {}),
+          }}
         />
       </div>
     );
@@ -77,10 +87,18 @@ function Chart({ artifact }: { artifact: ChartArtifact }) {
 function formatCell(value: string) {
   if (!/^-?\d+(\.\d+)?$/.test(value)) return value;
   const parsed = Number(value);
-  return Number.isInteger(parsed) ? parsed.toLocaleString() : parsed.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return Number.isInteger(parsed)
+    ? parsed.toLocaleString()
+    : parsed.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact, { type: "table" }>; siteId: number }) {
+function ArtifactTable({
+  artifact,
+  siteId,
+}: {
+  artifact: Extract<AnalystArtifact, { type: "table" }>;
+  siteId: number;
+}) {
   const sessionColumn = artifact.columns.indexOf(SESSION_COLUMN);
   const timestampColumn = artifact.columns.indexOf(TIMESTAMP_COLUMN);
   // A recording is only in the list for the window it happened in, so a link
@@ -147,35 +165,90 @@ function ArtifactTable({ artifact, siteId }: { artifact: Extract<AnalystArtifact
  * chat answer reads like the page it links to.
  */
 function Retention({ artifact }: { artifact: Extract<AnalystArtifact, { type: "retention" }> }) {
+  const t = useExtracted();
+  const { formatDateTime } = useDateTimeFormat();
+  const [pinned, setPinned] = useState<string | null>(null);
+  const periods = Object.keys(artifact.cohorts).sort();
+  const data = useMemo<ProcessedRetentionData>(
+    () => ({
+      // The card reads user counts per cell; the tool reports the share, so the
+      // counts are what that share was of the cohort size.
+      cohorts: Object.fromEntries(
+        periods.map(key => {
+          const cohort = artifact.cohorts[key];
+          return [
+            key,
+            {
+              size: cohort.size,
+              percentages: cohort.percentages,
+              counts: cohort.percentages.map(value =>
+                value === null ? null : Math.round((value / 100) * cohort.size)
+              ),
+            },
+          ];
+        })
+      ),
+      maxPeriods: artifact.maxPeriods,
+      mode: artifact.mode,
+      range: 0,
+      periods,
+      windowStart: "",
+      windowEnd: "",
+      timeZone: "UTC",
+      firstPeriodPartial: false,
+      lastPeriodPartial: false,
+      lastPeriodInProgress: false,
+      truncated: false,
+      lookbackDays: 0,
+    }),
+    [artifact, periods.join("|")]
+  );
+  const cohortLabel = useCallback(
+    (key: string) => {
+      const { first, last } = periodDays(key, data.mode);
+      if (data.mode === "day") return formatDateTime(first, { weekday: "short", month: "short", day: "numeric" });
+      return `${formatDateTime(first, { month: "short", day: "numeric" })} – ${formatDateTime(last, { month: "short", day: "numeric" })}`;
+    },
+    [data.mode, formatDateTime]
+  );
+  const formatDay = useCallback(
+    (key: string) => formatDateTime(DateTime.fromISO(key), { month: "short", day: "numeric" }),
+    [formatDateTime]
+  );
+  const periodLabel = useCallback(
+    (offset: number) =>
+      data.mode === "week" ? t("Week {index}", { index: String(offset) }) : t("Day {index}", { index: String(offset) }),
+    [data.mode, t]
+  );
+
   return (
-    <RetentionChart
-      isLoading={false}
-      mode={artifact.mode}
-      data={{
-        cohorts: artifact.cohorts,
-        maxPeriods: artifact.maxPeriods,
-        mode: artifact.mode,
-        range: 0,
-      }}
+    <RetentionCard
+      data={data}
+      model={buildRetentionModel(data)}
+      previousAverage={null}
+      pinnedCohort={pinned}
+      onPinCohort={setPinned}
+      hasFilters={false}
+      cohortLabel={cohortLabel}
+      periodLabel={periodLabel}
+      formatDay={formatDay}
     />
   );
 }
 
 function Funnel({ artifact }: { artifact: Extract<AnalystArtifact, { type: "funnel" }> }) {
-  return (
-    <FunnelSteps
-      data={artifact.results}
-      steps={artifact.steps}
-      isError={false}
-      error={null}
-      isPending={false}
-      {...(artifact.range ? { time: { mode: "range" as const, startDate: artifact.range.startDate, endDate: artifact.range.endDate } } : {})}
-      {...(artifact.filters ? { filters: artifact.filters } : {})}
-    />
-  );
+  // The product's funnel draws from the same step counts the tool already read.
+  const metrics = computeFunnelMetrics(artifact.results.map(row => ({ sessions: row.sessions })));
+  return <FunnelSteps steps={artifact.steps} metrics={metrics} />;
 }
 
-function Followups({ artifact, onPick }: { artifact: Extract<AnalystArtifact, { type: "followups" }>; onPick: (value: string) => void }) {
+function Followups({
+  artifact,
+  onPick,
+}: {
+  artifact: Extract<AnalystArtifact, { type: "followups" }>;
+  onPick: (value: string) => void;
+}) {
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{artifact.title}</p>

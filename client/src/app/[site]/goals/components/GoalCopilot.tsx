@@ -5,18 +5,19 @@ import { useState } from "react";
 import { useGetGoals } from "@/api/analytics/hooks/goals/useGetGoals";
 import type { GoalProposal } from "@/api/analyst/endpoints/suggest";
 import { CopilotPanel } from "../../components/CopilotPanel";
-import GoalFormModal from "./GoalFormModal";
+import { GoalEditor } from "./GoalEditor";
+import { goalFormValuesOf } from "../utils/goalForm";
 
 /**
  * The copilot on the Goals page.
  *
- * It proposes a goal and gets out of the way: "Open in the form" hands the value
- * to the same form a person fills in by hand, and nothing is written here.
+ * It proposes a goal and gets out of the way: "Open in the form" fills the
+ * ledger's own editor, and nothing is written here.
  */
 export function GoalCopilot({ siteId, organizationId }: { siteId: number; organizationId: string }) {
   const t = useExtracted();
   const { data } = useGetGoals({ page: 1, pageSize: 50 });
-  const [draft, setDraft] = useState<{ proposal: GoalProposal | null; open: boolean }>({ proposal: null, open: false });
+  const [initial, setInitial] = useState<ReturnType<typeof goalFormValuesOf> | null>(null);
 
   /**
    * What the page already tracks, named *and* spelled out.
@@ -52,18 +53,9 @@ export function GoalCopilot({ siteId, organizationId }: { siteId: number; organi
             </p>
           </>
         )}
-        onOpen={proposal => setDraft({ proposal, open: true })}
+        onOpen={proposal => setInitial(goalFormValuesOf(proposal.value))}
       />
-      {draft.proposal && (
-        <GoalFormModal
-          siteId={siteId}
-          open={draft.open}
-          onOpenChange={open => {
-            setDraft({ proposal: null, open });
-          }}
-          initialGoal={draft.proposal.value}
-        />
-      )}
+      {initial && <GoalEditor siteId={siteId} mode="create" initial={initial} onDone={() => setInitial(null)} />}
     </>
   );
 }

@@ -5,7 +5,9 @@ import { useState } from "react";
 import type { GoalProposal } from "@/api/analyst/endpoints/suggest";
 import type { Goal } from "../../../../api/analytics/endpoints";
 import { CopilotPanel } from "../../components/CopilotPanel";
-import GoalFormModal from "./GoalFormModal";
+import { GoalEditor } from "./GoalEditor";
+import { goalFormValuesOf } from "../utils/goalForm";
+import { goalPattern } from "../utils/goalLedger";
 
 /**
  * The copilot on a goal that matched nothing.
@@ -20,9 +22,8 @@ import GoalFormModal from "./GoalFormModal";
  */
 export function GoalFixer({ siteId, organizationId, goal }: { siteId: number; organizationId: string; goal: Goal }) {
   const t = useExtracted();
-  const [proposal, setProposal] = useState<GoalProposal | null>(null);
-  const [open, setOpen] = useState(false);
-  const pattern = goal.goalType === "path" ? goal.config.pathPattern : goal.goalType === "event" ? goal.config.eventName : goal.config.valuePattern;
+  const [initial, setInitial] = useState<ReturnType<typeof goalFormValuesOf>>(null);
+  const pattern = goalPattern(goal);
 
   return (
     <>
@@ -33,7 +34,9 @@ export function GoalFixer({ siteId, organizationId, goal }: { siteId: number; or
         existing={[{ ...(goal.name ? { name: goal.name } : {}), condition: pattern || goal.goalType }]}
         // Matches the banner above it: the number on the card is the selected
         // range, so the ask cannot claim a window the person is not looking at.
-        initialAsk={t("This goal matched nothing in the selected range. What does this site actually do that I should be tracking instead?")}
+        initialAsk={t(
+          "This goal matched nothing in the selected range. What does this site actually do that I should be tracking instead?"
+        )}
         askPlaceholder={t("Describe what to track instead")}
         revisePlaceholder={t("Say what to change about it")}
         loadingLabel={t("Looking at the pages and events this site actually has…")}
@@ -49,19 +52,9 @@ export function GoalFixer({ siteId, organizationId, goal }: { siteId: number; or
             </p>
           </>
         )}
-        onOpen={draft => {
-          setProposal(draft);
-          setOpen(true);
-        }}
+        onOpen={draft => setInitial(goalFormValuesOf(draft.value))}
       />
-      {proposal && (
-        <GoalFormModal
-          siteId={siteId}
-          open={open}
-          onOpenChange={setOpen}
-          initialGoal={proposal.value}
-        />
-      )}
+      {initial && <GoalEditor siteId={siteId} mode="create" initial={initial} onDone={() => setInitial(null)} />}
     </>
   );
 }

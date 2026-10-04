@@ -9,12 +9,18 @@ import { buildFunnelQuery } from "../funnels/getFunnel.js";
 import { buildGoalsConversionsQuery, buildGoalsTotalSessionsQuery } from "../goals/getGoals.js";
 import { buildGoalTimeSeriesQuery } from "../goals/getGoalTimeSeries.js";
 import { buildJourneysQuery } from "../getJourneys.js";
+import { parseJourneyOptions } from "../journeyPaths.js";
 import { FILTER_PARAMETERS, FILTER_TYPES, validateFilters } from "../utils/query-validation.js";
 import { buildMetricQuery } from "../getMetric.js";
 import { buildPerformanceByDimensionQuery } from "../performance/getPerformanceByDimension.js";
 import { buildPerformanceOverviewQuery } from "../performance/getPerformanceOverview.js";
 import { buildPerformanceTimeSeriesQuery } from "../performance/getPerformanceTimeSeries.js";
-import { buildRetentionQuery, processRetentionData } from "../getRetention.js";
+import {
+  buildRetentionQuery,
+  buildRetentionQueryParams,
+  processRetentionData,
+  resolveRetentionWindow,
+} from "../getRetention.js";
 import {
   buildChartQuery,
   buildMetricsSpecForWindow,
@@ -31,7 +37,15 @@ import { SessionReplayQueryService } from "../../../services/replay/sessionRepla
 import { sanitizeUntrustedValue } from "../../../mcp/tools/shared.js";
 import { SESSION_TOOLS } from "./sessionTools.js";
 import type { Artifact, ResultStore } from "./presentation.js";
-import { bucketsIn, defaultBucket, isTimePreset, previousRange, resolvePreset, timeStatementFor, type ResolvedRange } from "./time.js";
+import {
+  bucketsIn,
+  defaultBucket,
+  isTimePreset,
+  previousRange,
+  resolvePreset,
+  timeStatementFor,
+  type ResolvedRange,
+} from "./time.js";
 
 /**
  * The read-only analytics surface the analyst can reach.
@@ -132,8 +146,14 @@ const timeShape = {
 const timeArgsSchema = z
   .object({
     preset: z.string().optional(),
-    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    start_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    end_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   })
   .optional();
 
@@ -177,9 +197,11 @@ const baseParams = (ctx: ToolContext, range: ResolvedRange) => ({
 });
 
 /** Trims a long text column so one chatty URL cannot blow the model's context. */
-const compactCell = (value: unknown) => (typeof value === "string" && value.length > 300 ? `${value.slice(0, 300)}…` : value);
+const compactCell = (value: unknown) =>
+  typeof value === "string" && value.length > 300 ? `${value.slice(0, 300)}…` : value;
 
-const compactRows = (rows: ToolRow[]) => rows.map(row => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, compactCell(v)])));
+const compactRows = (rows: ToolRow[]) =>
+  rows.map(row => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, compactCell(v)])));
 
 /**
  * The most points a chart may carry.
@@ -211,21 +233,36 @@ const getOverview: AnalystTool = {
     "Headline metrics for a time range: sessions, pageviews, users, pages per session, bounce rate and average session duration. Include `compare: true` to get the change against the previous period of the same length.",
   parameters: {
     type: "object",
-    properties: { time: timeShape, compare: { type: "boolean", description: "Also return the previous period for comparison" } },
+    properties: {
+      time: timeShape,
+      compare: { type: "boolean", description: "Also return the previous period for comparison" },
+    },
   },
   async run(args, ctx) {
     const range = rangeFor(args, ctx);
     const params = baseParams(ctx, range);
     const current = await query<OverviewRow>({
-      query: buildOverviewQuery(buildMetricsSpecForWindow(params.filters, ctx.siteId, timeStatementFor(range, ctx.timezone))),
+      query: buildOverviewQuery(
+        buildMetricsSpecForWindow(params.filters, ctx.siteId, timeStatementFor(range, ctx.timezone))
+      ),
       params: { siteId: ctx.siteId },
     });
     const row = current[0] ?? ({} as OverviewRow);
     const metrics = OVERVIEW_METRICS.map(({ key, label, higherIsBetter }) => {
       const value = Number(row[key] ?? 0);
-      return { metric: label, value: formatNumber(value), unit: key === "session_duration" ? "seconds" : key === "bounce_rate" ? "percent" : "count", higher_is_better: higherIsBetter };
+      return {
+        metric: label,
+        value: formatNumber(value),
+        unit: key === "session_duration" ? "seconds" : key === "bounce_rate" ? "percent" : "count",
+        higher_is_better: higherIsBetter,
+      };
     });
-    const result: Record<string, unknown> = { range: range.label, start_date: range.startDate, end_date: range.endDate, metrics };
+    const result: Record<string, unknown> = {
+      range: range.label,
+      start_date: range.startDate,
+      end_date: range.endDate,
+      metrics,
+    };
 
     if (args.compare) {
       const previous = previousRange(range, ctx.timezone);
@@ -241,7 +278,10 @@ const getOverview: AnalystTool = {
           range: previous.label,
           start_date: previous.startDate,
           end_date: previous.endDate,
-          metrics: OVERVIEW_METRICS.map(({ key, label }) => ({ metric: label, value: formatNumber(Number(beforeRow[key] ?? 0)) })),
+          metrics: OVERVIEW_METRICS.map(({ key, label }) => ({
+            metric: label,
+            value: formatNumber(Number(beforeRow[key] ?? 0)),
+          })),
         };
         result.change_percent = Object.fromEntries(
           OVERVIEW_METRICS.map(({ key, label }) => {
@@ -265,7 +305,11 @@ const getTimeseries: AnalystTool = {
     type: "object",
     properties: {
       time: timeShape,
-      bucket: { type: "string", enum: ["hour", "day", "week"], description: "Defaults to a granularity that fits the range" },
+      bucket: {
+        type: "string",
+        enum: ["hour", "day", "week"],
+        description: "Defaults to a granularity that fits the range",
+      },
       compare: { type: "boolean", description: "Also return the previous period of the same length" },
     },
   },
@@ -296,7 +340,10 @@ const getTimeseries: AnalystTool = {
     // the same thing: a site with two weeks of history answers a 90-day question
     // with two weeks of points. Reporting only the requested range is how an
     // answer ends up claiming a period it has no data for.
-    const stamps = rows.map(row => String(row.time ?? "")).filter(Boolean).sort();
+    const stamps = rows
+      .map(row => String(row.time ?? ""))
+      .filter(Boolean)
+      .sort();
     const result: Record<string, unknown> = {
       range: range.label,
       bucket,
@@ -384,13 +431,18 @@ const listEventNames: AnalystTool = {
       query: buildEventNamesQuery({ ...baseParams(ctx, range), event_name: "" }, ctx.siteId),
       params: { siteId: ctx.siteId },
     });
-    return { text: JSON.stringify({ range: range.label, count: rows.length, events: rows.slice(0, 40) }), rows, preview: { limit: 50 } };
+    return {
+      text: JSON.stringify({ range: range.label, count: rows.length, events: rows.slice(0, 40) }),
+      rows,
+      preview: { limit: 50 },
+    };
   },
 };
 
 const getEventProperties: AnalystTool = {
   name: "get_event_properties",
-  description: "Property names seen on a custom event, with how often each one is set. Use it to find the property holding an id, name or category.",
+  description:
+    "Property names seen on a custom event, with how often each one is set. Use it to find the property holding an id, name or category.",
   parameters: {
     type: "object",
     properties: { event_name: { type: "string" }, time: timeShape },
@@ -409,8 +461,13 @@ const getEventProperties: AnalystTool = {
       const key = String(row.propertyKey ?? "");
       if (!key) continue;
       const entry = properties.find(item => item.property === key);
-      if (!entry) properties.push({ property: key, values: [{ value: String(row.propertyValue ?? ""), count: Number(row.count ?? 0) }] });
-      else if (entry.values.length < 5) entry.values.push({ value: String(row.propertyValue ?? ""), count: Number(row.count ?? 0) });
+      if (!entry)
+        properties.push({
+          property: key,
+          values: [{ value: String(row.propertyValue ?? ""), count: Number(row.count ?? 0) }],
+        });
+      else if (entry.values.length < 5)
+        entry.values.push({ value: String(row.propertyValue ?? ""), count: Number(row.count ?? 0) });
     }
     return {
       text: JSON.stringify({ event_name: eventName, properties: properties.slice(0, 25) }),
@@ -444,7 +501,11 @@ const getErrors: AnalystTool = {
         ),
         params: { siteId: ctx.siteId, errorMessage: String(args.error_message) },
       });
-      return { text: JSON.stringify({ error_message: args.error_message, range: range.label, bucket, points: rows.length }), rows, preview: { limit: 60 } };
+      return {
+        text: JSON.stringify({ error_message: args.error_message, range: range.label, bucket, points: rows.length }),
+        rows,
+        preview: { limit: 60 },
+      };
     }
     // One row past the cap, so "there are more" is known rather than guessed.
     // `count` used to be the number of rows returned, which read as the number of
@@ -477,7 +538,10 @@ const getWebVitals: AnalystTool = {
     type: "object",
     properties: {
       time: timeShape,
-      dimension: { type: "string", enum: ["pathname", "country", "device_type", "browser", "operating_system", "region"] },
+      dimension: {
+        type: "string",
+        enum: ["pathname", "country", "device_type", "browser", "operating_system", "region"],
+      },
       limit: { type: "integer", minimum: 1, maximum: 50 },
     },
   },
@@ -492,9 +556,16 @@ const getWebVitals: AnalystTool = {
         ),
         params: { siteId: ctx.siteId },
       });
-      return { text: JSON.stringify({ dimension: args.dimension, range: range.label, rows: rows.slice(0, 15) }), rows, preview: { limit: 50 } };
+      return {
+        text: JSON.stringify({ dimension: args.dimension, range: range.label, rows: rows.slice(0, 15) }),
+        rows,
+        preview: { limit: 50 },
+      };
     }
-    const overview = await query<ToolRow>({ query: buildPerformanceOverviewQuery(params, ctx.siteId), params: { siteId: ctx.siteId } });
+    const overview = await query<ToolRow>({
+      query: buildPerformanceOverviewQuery(params, ctx.siteId),
+      params: { siteId: ctx.siteId },
+    });
     const trend = await query<ToolRow>({
       query: buildPerformanceTimeSeriesQuery(
         { ...params, bucket: defaultBucket(range) === "hour" ? "hour" : "day" },
@@ -519,21 +590,32 @@ const getRetention: AnalystTool = {
   },
   async run(args, ctx) {
     const mode = args.mode === "week" ? "week" : "day";
-    const range = Math.min(Math.max(Number(args.range ?? 30), 7), 365);
-    const rows = await query<{
-      cohort_period: string;
-      period_difference: number;
-      cohort_size: number;
-      retained_users: number;
-      retention_percentage: number;
-    }>({ query: buildRetentionQuery(mode), params: { siteId: ctx.siteId, timeRange: range } });
-    const processed = processRetentionData(rows);
-    const cohorts = Object.entries(processed.cohorts)
+    const rangeDays = Math.min(Math.max(Number(args.range ?? 30), 7), 365);
+    // Retention cohorts are cut to whole periods and never reach past now, so the
+    // tool's own range is a hint rather than the window: resolveRetentionWindow
+    // decides where the cohorts start and end.
+    const params = baseParams(ctx, rangeFor({}, ctx));
+    const window = resolveRetentionWindow({ ...params, range: String(rangeDays) }, mode);
+    const rows = await query<{ cohort_period: string; period_difference: number; retained_users: number }>({
+      query: buildRetentionQuery(window, params.filters, ctx.siteId),
+      params: buildRetentionQueryParams(window, ctx.siteId),
+    });
+    const processed = processRetentionData(rows, window.periods);
+    const cohorts = Object.entries(processed)
       .sort(([a], [b]) => b.localeCompare(a))
       .slice(0, 14)
-      .map(([cohort, { size, percentages }]) => ({ cohort, size, retained_percent: percentages.slice(0, 8).map(value => (value === null ? null : formatNumber(value))) }));
+      .map(([cohort, { size, percentages }]) => ({
+        cohort,
+        size,
+        retained_percent: percentages.slice(0, 8).map(value => (value === null ? null : formatNumber(value))),
+      }));
     return {
-      text: JSON.stringify({ mode, range_days: range, cohorts: cohorts.slice(0, 6), total_cohorts: Object.keys(processed.cohorts).length }),
+      text: JSON.stringify({
+        mode,
+        range_days: rangeDays,
+        cohorts: cohorts.slice(0, 6),
+        total_cohorts: Object.keys(processed).length,
+      }),
       // Retention is a grid; without the rows there is nothing for show_retention
       // to draw and the answer can only be prose.
       rows: rows as ToolRow[],
@@ -628,7 +710,10 @@ const getErrorEvents: AnalystTool = {
       rows: listed,
       // The stack and the message repeat on every row; the model needs the page,
       // the session and the context, not the same text twenty times.
-      preview: { columns: ["timestamp", "message", "session_id", "hostname", "pathname", "country", "browser", "device_type"], limit: 20 },
+      preview: {
+        columns: ["timestamp", "message", "session_id", "hostname", "pathname", "country", "browser", "device_type"],
+        limit: 20,
+      },
       // So a session link opens the recording inside the window the answer was
       // about, rather than whatever range the dashboard happens to be on.
       range: { startDate: range.startDate, endDate: range.endDate },
@@ -711,25 +796,27 @@ const getGoalsTool: AnalystTool = {
 };
 
 /** A goal the model named by id, exact name, or the condition it matches. */
-const matchesGoal = (goal: (typeof goals.$inferSelect), wanted: string) => {
+const matchesGoal = (goal: typeof goals.$inferSelect, wanted: string) => {
   const needle = wanted.trim().toLowerCase();
   return (
     String(goal.goalId) === needle ||
     (goal.name ?? "").toLowerCase() === needle ||
     goalLabel(goal).toLowerCase().includes(needle) ||
-    JSON.stringify(goal.config ?? {}).toLowerCase().includes(needle)
+    JSON.stringify(goal.config ?? {})
+      .toLowerCase()
+      .includes(needle)
   );
 };
 
 /** What the goal actually counts, in words: the path or event behind it. */
-const goalLabel = (goal: (typeof goals.$inferSelect)) => {
+const goalLabel = (goal: typeof goals.$inferSelect) => {
   if (goal.name) return goal.name;
   const config = (goal.config ?? {}) as { pathPattern?: string; eventName?: string; valuePattern?: string };
   return config.pathPattern || config.eventName || config.valuePattern || goal.goalType;
 };
 
 /** The pattern a goal watches for, so the answer can say what would count. */
-const goalTarget = (goal: (typeof goals.$inferSelect)) => {
+const goalTarget = (goal: typeof goals.$inferSelect) => {
   const config = (goal.config ?? {}) as { pathPattern?: string; eventName?: string; valuePattern?: string };
   return config.pathPattern || config.eventName || config.valuePattern || "";
 };
@@ -786,7 +873,12 @@ const getJourneys: AnalystTool = {
     type: "object",
     properties: {
       max_steps: { type: "integer", minimum: 2, maximum: 10, description: "Longest path to consider. Defaults to 3" },
-      limit: { type: "integer", minimum: 1, maximum: 100, description: "How many distinct paths to return. Defaults to 10" },
+      limit: {
+        type: "integer",
+        minimum: 1,
+        maximum: 100,
+        description: "How many distinct paths to return. Defaults to 10",
+      },
       time: timeShape,
     },
   },
@@ -796,11 +888,23 @@ const getJourneys: AnalystTool = {
     // 100, and the builder binds both.
     const maxSteps = Math.min(Math.max(Number(args.max_steps ?? 3), 2), 10);
     const journeyLimit = Math.min(Math.max(Number(args.limit ?? 10), 1), 100);
-    const rows = await query<{ journey: string[]; sessions_count: number; percentage: number }>({
-      query: buildJourneysQuery({ ...baseParams(ctx, range), steps: String(maxSteps) }, ctx.siteId, {}),
-      params: { siteId: ctx.siteId, maxSteps, journeyLimit },
-    });
-    return { text: JSON.stringify({ range: range.label, count: rows.length, journeys: rows.slice(0, 5) }), rows, preview: { limit: 20 } };
+    const parsed = parseJourneyOptions({ steps: String(maxSteps) });
+    if (!parsed.ok) {
+      return { text: JSON.stringify({ error: parsed.error }), rows: [] };
+    }
+    const rows = await query<{ journey: string[]; sessions_count: number; percentage: number }>(
+      buildJourneysQuery(
+        { ...baseParams(ctx, range), steps: String(maxSteps) },
+        ctx.siteId,
+        parsed.options,
+        journeyLimit
+      )
+    );
+    return {
+      text: JSON.stringify({ range: range.label, count: rows.length, journeys: rows.slice(0, 5) }),
+      rows,
+      preview: { limit: 20 },
+    };
   },
 };
 
@@ -869,7 +973,7 @@ const searchReplays: AnalystTool = {
           range: range.label,
           count: 0,
           filtered_by: filters,
-          note: "No sessions matched that filter. Filter values match exactly, including capitalisation — a Site's device_type values are usually \"Mobile\" and \"Desktop\", not lowercase. Call get_breakdown on that dimension to see the exact values before concluding there were none.",
+          note: 'No sessions matched that filter. Filter values match exactly, including capitalisation — a Site\'s device_type values are usually "Mobile" and "Desktop", not lowercase. Call get_breakdown on that dimension to see the exact values before concluding there were none.',
         }),
       };
     }
@@ -928,7 +1032,8 @@ const runSql: AnalystTool = {
   },
 };
 
-const compactRow = (row: ToolRow) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, compactCell(value)]));
+const compactRow = (row: ToolRow) =>
+  Object.fromEntries(Object.entries(row).map(([key, value]) => [key, compactCell(value)]));
 
 export const ANALYST_TOOLS: AnalystTool[] = [
   ...SESSION_TOOLS,

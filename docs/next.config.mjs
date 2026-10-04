@@ -19,12 +19,15 @@ const withNextIntl = createNextIntlPlugin({
 
 const withMDX = createMDX();
 
+// Vercel packages monorepo builds relative to its supplied tracing root.
+// Keep local builds rooted in docs when that override is absent.
+const tracingRoot = process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT || import.meta.dirname;
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  // Keep this independent app rooted here despite the parent pnpm workspace.
-  outputFileTracingRoot: import.meta.dirname,
-  turbopack: { root: import.meta.dirname },
+  outputFileTracingRoot: tracingRoot,
+  turbopack: { root: tracingRoot },
   images: {
     remotePatterns: [
       {
@@ -87,6 +90,11 @@ const config = {
       ['/blog/real-time-reports', '/features/web-analytics'],
       ['/blog/cross-site-tracking', '/features/web-analytics'],
       ['/blog/user-flow-examples-2025', '/features/user-journeys'],
+      // 2026-09 blog cleanup: two posts merged into keyword-targeted guides, two removed.
+      ['/blog/churn-rate-vs-retention-rate', '/blog/retention-analysis'],
+      ['/blog/what-is-sales-funnel-rybbit', '/blog/funnel-analysis'],
+      ['/blog/content-marketing-funnel', '/blog/funnel-analysis'],
+      ['/blog/onyx-ai-knowledge-platform', '/blog'],
     ];
     return [
       ...retiredSlugs.map(slug => ({
