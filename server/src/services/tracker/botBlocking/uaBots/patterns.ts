@@ -376,8 +376,47 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
   // Each token is distinct, so these duplicate the substring rule rather than
   // widening it — the loose rule still catches the variants listed beside each.
   { pattern: "\\bgooglebot\\b", category: "search", name: "Googlebot", operator: "Google", purpose: "search" },
-  // Also GoogleOther, AdsBot-Google, Google-InspectionTool, Google-PageRenderer.
   { pattern: "\\bgoogleother\\b", category: "search", name: "Google-Other", operator: "Google", purpose: "search" },
+  // Google runs several crawlers behind a *browser-shaped* user agent, so the
+  // loose `google(?!…)` rule catches them and nothing records who they are.
+  // Each of these arrives on a site looking like an ordinary Chrome or Safari,
+  // which is why naming them is the only way to tell them apart in the report.
+  {
+    pattern: "\\bgoogle-read-aloud\\b",
+    category: "search",
+    name: "Google-Read-Aloud",
+    operator: "Google",
+    purpose: "search",
+  },
+  {
+    pattern: "\\bgoogle-inspectiontool\\b",
+    category: "search",
+    name: "Google-InspectionTool",
+    operator: "Google",
+    purpose: "search",
+  },
+  {
+    pattern: "\\bgoogle-pagerenderer\\b",
+    category: "search",
+    name: "Google-PageRenderer",
+    operator: "Google",
+    purpose: "search",
+  },
+  { pattern: "\\badsbot-google\\b", category: "seo", name: "AdsBot-Google", operator: "Google", purpose: "seo" },
+  {
+    pattern: "\\bmediapartners-google\\b",
+    category: "seo",
+    name: "Mediapartners-Google",
+    operator: "Google",
+    purpose: "seo",
+  },
+  {
+    pattern: "\\bapis-google\\b",
+    category: "framework",
+    name: "APIs-Google",
+    operator: "Google",
+    purpose: "scripted",
+  },
   // Anchored on the full token: a bare `bingbot` never reaches here because the
   // vendored `bots?` rule matches first, and this only fires for the prefixed
   // forms that rule misses.

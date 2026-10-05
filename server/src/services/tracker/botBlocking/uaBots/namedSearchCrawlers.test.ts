@@ -72,6 +72,43 @@ describe("named search crawlers", () => {
     ).toBe(false);
   });
 
+  /**
+   * Google runs crawlers behind a browser-shaped user agent. They arrive looking
+   * like ordinary Chrome or Safari, so only the vendored loose `google(?!…)`
+   * substring convicts them and nothing records a name — which is exactly how a
+   * live site ended up with unattributable rows that read as a browser.
+   */
+  it("names the Google crawlers that send a browser-shaped user agent", () => {
+    expect(
+      named(
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36 (compatible; Google-Read-Aloud; +https://support.google.com/webmasters/answer/1061943)"
+      )
+    ).toEqual({ isBot: true, name: "Google-Read-Aloud", operator: "Google", purpose: "search" });
+    expect(named("Mozilla/5.0 (compatible; Google-InspectionTool/1.0)").name).toBe("Google-InspectionTool");
+    expect(named("Mozilla/5.0 (compatible; Google-PageRenderer)").name).toBe("Google-PageRenderer");
+    expect(named("AdsBot-Google (+http://www.google.com/adsbot.html)").purpose).toBe("seo");
+    expect(named("Mediapartners-Google").purpose).toBe("seo");
+    expect(named("APIs-Google (+https://developers.google.com/webmasters/APIs-Google.html)").purpose).toBe("scripted");
+  });
+
+  /**
+   * Those rules must key on the crawler's own token, not on "looks like a
+   * browser": the browser half of each user agent is identical to a real
+   * visitor's, so a rule that matched on it would convict everyone.
+   */
+  it("still does not convict a plain Chrome or Safari", () => {
+    expect(
+      classifyUA(
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36"
+      ).isBot
+    ).toBe(false);
+    expect(
+      classifyUA(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+      ).isBot
+    ).toBe(false);
+  });
+
   it("still catches the AI crawlers ahead of the new search rules", () => {
     expect(
       named("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot")
