@@ -267,7 +267,13 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
   { pattern: "\\bgptbot\\b", category: "ai", name: "GPTBot", operator: "OpenAI", purpose: "ai_training" },
   { pattern: "\\bclaudebot\\b", category: "ai", name: "ClaudeBot", operator: "Anthropic", purpose: "ai_training" },
   { pattern: "\\bccbot\\b", category: "ai", name: "CCBot", operator: "Common Crawl", purpose: "ai_training" },
-  { pattern: "\\bgoogle-extended\\b", category: "ai", name: "Google-Extended", operator: "Google", purpose: "ai_training" },
+  {
+    pattern: "\\bgoogle-extended\\b",
+    category: "ai",
+    name: "Google-Extended",
+    operator: "Google",
+    purpose: "ai_training",
+  },
   {
     pattern: "\\bapplebot-extended\\b",
     category: "ai",
@@ -307,7 +313,13 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
     operator: "Perplexity",
     purpose: "ai_search",
   },
-  { pattern: "\\bduckassistbot\\b", category: "ai", name: "DuckAssistBot", operator: "DuckDuckGo", purpose: "ai_search" },
+  {
+    pattern: "\\bduckassistbot\\b",
+    category: "ai",
+    name: "DuckAssistBot",
+    operator: "DuckDuckGo",
+    purpose: "ai_search",
+  },
   { pattern: "\\byouchat\\b", category: "ai", name: "YouChat", operator: "You.com", purpose: "ai_search" },
   { pattern: "\\bgrokbot\\b", category: "ai", name: "GrokBot", operator: "xAI", purpose: "ai_search" },
 
@@ -357,6 +369,49 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
   { pattern: "duckduckgo", category: "search", name: "DuckDuckBot", operator: "DuckDuckGo", purpose: "search" },
   { pattern: "slurp", category: "search", name: "Yahoo! Slurp", operator: "Yahoo", purpose: "search" },
 
+  // The large search engines have no specific upstream pattern at all: the
+  // vendored list only carries a loose `google(?!…)` substring, so Googlebot and
+  // friends arrived as an unnamed `category: "search"` row with no operator and
+  // no purpose. Naming them here is what lets the Bots page say who they are.
+  // Each token is distinct, so these duplicate the substring rule rather than
+  // widening it — the loose rule still catches the variants listed beside each.
+  { pattern: "\\bgooglebot\\b", category: "search", name: "Googlebot", operator: "Google", purpose: "search" },
+  // Also GoogleOther, AdsBot-Google, Google-InspectionTool, Google-PageRenderer.
+  { pattern: "\\bgoogleother\\b", category: "search", name: "Google-Other", operator: "Google", purpose: "search" },
+  // Anchored on the full token: a bare `bingbot` never reaches here because the
+  // vendored `bots?` rule matches first, and this only fires for the prefixed
+  // forms that rule misses.
+  {
+    pattern: "\\bmsnbot\\b|\\bingbot\\b",
+    category: "search",
+    name: "Bingbot",
+    operator: "Microsoft",
+    purpose: "search",
+  },
+  { pattern: "\\bbaiduspider\\b", category: "search", name: "Baiduspider", operator: "Baidu", purpose: "search" },
+  {
+    pattern: "\\bsogou web spider\\b|\\bsogou\\b",
+    category: "search",
+    name: "Sogou",
+    operator: "Sogou",
+    purpose: "search",
+  },
+  { pattern: "\\bseznambot\\b", category: "search", name: "SeznamBot", operator: "Seznam", purpose: "search" },
+  { pattern: "\\bpetalbot\\b", category: "search", name: "PetalBot", operator: "Huawei", purpose: "search" },
+  // `yeti` alone is far too loose to search for: "Yeti" ships in the UA of real
+  // Android browsers (the Yeti engine). Naver's crawler always announces itself
+  // as yeti.naver, so the host part is what makes this safe.
+  {
+    pattern: "\\bnaverbot\\b|\\byeti\\.naver\\b",
+    category: "search",
+    name: "Yeti",
+    operator: "Naver",
+    purpose: "search",
+  },
+  { pattern: "\\bdaum\\b", category: "search", name: "Daum", operator: "Kakao", purpose: "search" },
+  { pattern: "\\bmojeekbot\\b", category: "search", name: "MojeekBot", operator: "Mojeek", purpose: "search" },
+  { pattern: "\\bmarginalia\\b", category: "search", name: "Marginalia", operator: "Marginalia", purpose: "search" },
+
   // Social link previewers not caught by upstream
   {
     pattern: "facebookexternalhit",
@@ -379,7 +434,13 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
     purpose: "social_preview",
   },
   { pattern: "redditbot", category: "social", name: "RedditBot", operator: "Reddit", purpose: "social_preview" },
-  { pattern: "pinterestbot", category: "social", name: "Pinterestbot", operator: "Pinterest", purpose: "social_preview" },
+  {
+    pattern: "pinterestbot",
+    category: "social",
+    name: "Pinterestbot",
+    operator: "Pinterest",
+    purpose: "social_preview",
+  },
   { pattern: "embedly", category: "social", name: "Embedly", operator: "Embedly", purpose: "social_preview" },
 
   // SEO crawlers commonly seen in the wild
@@ -410,7 +471,13 @@ export const EXTRA_BOT_PATTERNS: BotPattern[] = [
 
   // Monitoring services
   { pattern: "pingdom", category: "monitoring", name: "Pingdom", operator: "Pingdom", purpose: "monitoring" },
-  { pattern: "uptimerobot", category: "monitoring", name: "UptimeRobot", operator: "UptimeRobot", purpose: "monitoring" },
+  {
+    pattern: "uptimerobot",
+    category: "monitoring",
+    name: "UptimeRobot",
+    operator: "UptimeRobot",
+    purpose: "monitoring",
+  },
   { pattern: "datadog", category: "monitoring", name: "Datadog", operator: "Datadog", purpose: "monitoring" },
   { pattern: "newrelic", category: "monitoring", name: "New Relic", operator: "New Relic", purpose: "monitoring" },
   { pattern: "site24x7", category: "monitoring", name: "Site24x7", operator: "Site24x7", purpose: "monitoring" },
