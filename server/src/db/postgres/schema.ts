@@ -94,6 +94,7 @@ export const sites = pgTable(
     trackErrors: boolean().default(false),
     trackOutbound: boolean().default(true),
     trackUrlParams: boolean().default(true),
+    trackUrlFragments: boolean().default(false),
     trackInitialPageView: boolean().default(true),
     trackSpaNavigation: boolean().default(true),
     trackIp: boolean().default(false),
@@ -111,7 +112,12 @@ export const sites = pgTable(
     // privateLinkKey until it is claimed; the cleanup cron deletes it after this.
     claimExpiresAt: timestamp("claim_expires_at", { mode: "string" }),
   },
-  table => [check("sites_type_check", sql`${table.type} IS NULL OR ${table.type} IN ('web', 'mobile')`)]
+  table => [
+    check("sites_type_check", sql`${table.type} IS NULL OR ${table.type} IN ('web', 'mobile')`),
+    // Tracking and the route guards resolve a Site by its text id on every
+    // cache miss.
+    index("sites_id_idx").on(table.id),
+  ]
 );
 
 // Active sessions table.

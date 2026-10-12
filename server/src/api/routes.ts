@@ -93,7 +93,6 @@ import {
   getSiteEventCount,
   getUserGoals,
   getUserInfo,
-  getUserRepeatedError,
   getUserSegments,
   getUserSessionCount,
   getUserSessionGoals,
@@ -148,6 +147,7 @@ import {
   deleteSite,
   deleteSiteImport,
   getEmbedStats,
+  getFavicon,
   getSite,
   getSiteExcludedCountries,
   getSiteExcludedHostnames,
@@ -192,6 +192,7 @@ import {
   updateAccountSettings,
 } from "./user/index.js";
 import { createDashboardCache } from "./analytics/utils/dashboardCache.js";
+import { filterParamError } from "./analytics/utils/getFilterStatement.js";
 import { validateHttpTimeParams } from "./analytics/utils/query-validation.js";
 import { handleAppSumoWebhook, activateAppSumoLicense } from "./as/index.js";
 import { unclaimedSiteRouteOptions } from "./sites/createUnclaimedSite.js";
@@ -227,6 +228,15 @@ const validateTimeParams = async (request: FastifyRequest, reply: FastifyReply) 
   }
 };
 
+// Reject a malformed `filters` param (bad JSON, unknown parameter, invalid
+// regex) up front; handlers throw on it, which answered 500.
+const validateFilterParam = async (request: FastifyRequest, reply: FastifyReply) => {
+  const error = filterParamError((request.query as Record<string, unknown> | undefined)?.filters);
+  if (error) {
+    return reply.status(400).send({ error: `Invalid filters: ${error}` });
+  }
+};
+
 // Route access. Every /api route declares who may call it (config.access) and
 // the onRoute check below refuses to boot a route that doesn't, so a new
 // endpoint cannot ship without an explicit decision.
@@ -245,11 +255,15 @@ const validateTimeParams = async (request: FastifyRequest, reply: FastifyReply) 
 // expandSegmentParam turns a `segment_id` query param into `filters` after the
 // access guard has run, so every analytics endpoint accepts a saved segment
 // with no per-endpoint change. It is a no-op when the param is absent.
-const site = (permission: Permission, options: { allowPublic?: boolean; validateTime?: boolean } = {}) => ({
+const site = (
+  permission: Permission,
+  options: { allowPublic?: boolean; validateTime?: boolean; validateFilters?: boolean } = {}
+) => ({
   preHandler: [
     resolveSiteId,
     requireSitePermission(permission, { allowPublic: options.allowPublic }),
     ...(options.validateTime === false ? [] : [validateTimeParams]),
+    ...(options.validateFilters === false ? [] : [validateFilterParam]),
     expandSegmentParam,
   ] as any,
   config: { access: { level: "site", permission, allowPublic: !!options.allowPublic } as RouteAccess },
@@ -292,7 +306,9 @@ const publicFunnelsRead = publicSite("funnels:read");
 const publicGoalsRead = publicSite("goals:read");
 const publicSitesRead = publicSite("sites:read");
 const publicReplayRead = publicSite("replay:read");
-const publicGscRead = publicSite("gsc:read");
+// Search Console's `filters` param is its own {dimension, operator, expression}
+// shape, validated by the handler.
+const publicGscRead = site("gsc:read", { allowPublic: true, validateFilters: false });
 // Annotations validate their own optional start/end bounds (either may stand
 // alone), so the shared time validator is left off this chain.
 const publicAnnotationsRead = site("annotations:read", { allowPublic: true, validateTime: false });
@@ -352,7 +368,6 @@ async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.get("/sites/:siteId/users/:userId/goals", publicUsersRead, getUserGoals);
   fastify.get("/sites/:siteId/users/:userId/session-goals", publicUsersRead, getUserSessionGoals);
   fastify.get("/sites/:siteId/users/:userId/segments", publicUsersRead, getUserSegments);
-  fastify.get("/sites/:siteId/users/:userId/repeated-error", publicUsersRead, getUserRepeatedError);
   fastify.post("/sites/:siteId/users/identify", site("users:write"), identifyUser);
   fastify.put("/sites/:siteId/users/:userId/traits", site("users:write"), updateUserTraits);
   fastify.delete("/sites/:siteId/users/:userId", site("users:delete"), deleteUser);
@@ -484,6 +499,11 @@ async function sessionReplayRoutes(fastify: FastifyInstance) {
 }
 
 async function sitesRoutes(fastify: FastifyInstance) {
+  fastify.get(
+    "/favicon",
+    { config: { access: "public" as RouteAccess, rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    getFavicon
+  );
   // Sites
   fastify.get("/sites/:siteId", publicSitesRead, getSite);
   fastify.put("/sites/:siteId/config", site("sites:configure"), updateSiteConfig);
@@ -601,7 +621,14 @@ async function stripeAdminRoutes(fastify: FastifyInstance) {
   fastify.patch("/admin/organizations/:organizationId/members/:memberId", systemAdmin, updateAdminOrganizationMember);
   fastify.delete("/admin/organizations/:organizationId/members/:memberId", systemAdmin, deleteAdminOrganizationMember);
   fastify.get("/admin/service-event-count", systemAdmin, getAdminServiceEventCount);
-  fastify.post("/admin/telemetry", publicRoute, collectTelemetry); // Public - telemetry collection
+  fastify.post(
+    "/admin/telemetry",
+    {
+      bodyLimit: 16 * 1024,
+      config: { access: "public" as RouteAccess, rateLimit: { max: 10, timeWindow: "1 hour" } },
+    },
+    collectTelemetry
+  ); // Public - telemetry collection
 
   // STRIPE & ADMIN
   if (IS_CLOUD) {

@@ -44,7 +44,7 @@ function makePayload(overrides: Partial<TotalTrackingPayload & { sessionId: stri
     type: "pageview",
     ipAddress: "203.0.113.10",
     timestamp: new Date().toISOString(),
-    ua: { browser: {}, os: {} } as UAParser.IResult,
+    ua: { browser: {}, os: {}, device: {} } as UAParser.IResult,
     userAgent: "Mozilla/5.0",
     userId: "fingerprint-abc",
     identifiedUserId: "",
@@ -67,6 +67,18 @@ describe("pageviewQueue", () => {
 
   afterEach(() => {
     Settings.defaultZone = originalZone;
+  });
+
+  it("drain flushes everything buffered without waiting for the interval", async () => {
+    for (let i = 0; i < 5001; i++) {
+      await pageviewQueue.add(makePayload());
+    }
+
+    await pageviewQueue.drain();
+
+    expect(mocks.insert).toHaveBeenCalledTimes(2);
+    expect(mocks.insert.mock.calls[0][0].values).toHaveLength(5000);
+    expect(mocks.insert.mock.calls[1][0].values).toHaveLength(1);
   });
 
   it("stores the ASN, org, and datacenter classification for a recognized IP", async () => {

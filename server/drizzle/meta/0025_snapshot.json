@@ -1,6 +1,6 @@
 {
-  "id": "9f4c1d20-8b3e-4c17-9a55-2d6b1e7c0843",
-  "prevId": "17d8b70d-d08d-4c77-bf7f-fa0d06ea144b",
+  "id": "b7e2f4a1-3c95-4d68-8a02-5f1c9d4e7b13",
+  "prevId": "56adc13a-c882-46cd-b5ae-e366f7f67bf0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3845,6 +3845,13 @@
           "notNull": false,
           "default": true
         },
+        "trackUrlFragments": {
+          "name": "trackUrlFragments",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
         "trackInitialPageView": {
           "name": "trackInitialPageView",
           "type": "boolean",
@@ -3919,7 +3926,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "sites_id_idx": {
+          "name": "sites_id_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "sites_created_by_user_id_fk": {
           "name": "sites_created_by_user_id_fk",

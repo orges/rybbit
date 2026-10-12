@@ -70,7 +70,7 @@ export function CreateFunnelDialog({
       { steps, name },
       {
         onSuccess: () => {
-          setOpen(false);
+          handleOpenChange(false);
           toast?.success(t("Funnel saved successfully"));
         },
         onError: error => {
@@ -81,7 +81,9 @@ export function CreateFunnelDialog({
     );
   };
 
-  // Reset form when the editor closes
+  // Reset form when the editor closes. Radix only calls this for its own dismissals (Esc, overlay),
+  // so save and cancel route through it too. Resets to the seeded proposal rather than to
+  // a blank funnel, so reopening after a copilot proposal still shows it.
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (!next) {
@@ -111,7 +113,7 @@ export function CreateFunnelDialog({
           steps={steps}
           setSteps={setSteps}
           onSave={handleSaveFunnel}
-          onCancel={() => setOpen(false)}
+          onCancel={() => handleOpenChange(false)}
           saveButtonText={t("Save Funnel")}
           isSaving={isSaving}
           isError={isError}
