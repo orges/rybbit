@@ -129,6 +129,10 @@ export default function FunnelsPage() {
       <div className="p-2 md:p-4 max-w-[1300px] mx-auto space-y-3">
         <SubHeader availableFilters={FUNNEL_PAGE_FILTERS} />
 
+        {/* Outside the has-funnels branch below: a site with no funnels is exactly
+            the one that needs to be told what journey it actually has. */}
+        {siteData?.organizationId && <FunnelCopilot siteId={Number(site)} organizationId={siteData.organizationId} />}
+
         {(isLoading || hasFunnels) && (
           <>
             <FunnelStatBand
@@ -154,9 +158,6 @@ export default function FunnelsPage() {
             >
               <FunnelSortControl value={activeSort} onChange={changeSort} comparisonEnabled={comparisonEnabled} />
             </AnalysisBar>
-            {siteData?.organizationId && (
-              <FunnelCopilot siteId={Number(site)} organizationId={siteData.organizationId} />
-            )}
             {current.isError && (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 {t("The funnels' figures could not be loaded. Open a funnel to analyze it on its own.")}

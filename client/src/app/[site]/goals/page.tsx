@@ -137,6 +137,10 @@ export default function GoalsPage() {
       <div className="p-2 md:p-4 max-w-[1400px] mx-auto space-y-3">
         <SubHeader availableFilters={GOALS_PAGE_FILTERS} />
 
+        {/* Outside the has-goals branch below: a site with no goals is exactly the
+            one that needs to be told what it should be tracking. */}
+        {siteData?.organizationId && <GoalCopilot siteId={Number(site)} organizationId={siteData.organizationId} />}
+
         {/* if site is not loaded, show skeleton */}
         {isLoading || !site ? (
           <>
@@ -222,8 +226,6 @@ export default function GoalsPage() {
               />
               <BucketSelection />
             </AnalysisBar>
-
-            {siteData?.organizationId && <GoalCopilot siteId={Number(site)} organizationId={siteData.organizationId} />}
 
             <GoalsLedger
               rows={visibleRows}
