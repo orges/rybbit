@@ -305,6 +305,9 @@
   var SessionReplayRecorder = class {
     constructor(config, userId, sendBatch) {
       this.isRecording = false;
+      // Set once the server reports the session is over its size cap; recording
+      // stays off for the rest of this page.
+      this.capped = false;
       this.eventBuffer = [];
       this.config = config;
       this.userId = userId;
@@ -338,7 +341,7 @@
       });
     }
     startRecording() {
-      if (this.isRecording || !window.rrweb || !this.config.enableSessionReplay) {
+      if (this.capped || this.isRecording || !window.rrweb || !this.config.enableSessionReplay) {
         return;
       }
       try {
@@ -465,10 +468,24 @@
         }
       };
       try {
-        await this.sendBatch(batch);
+        const result = await this.sendBatch(batch);
+        if (result?.stopRecording) {
+          this.stopForSizeCap();
+        }
       } catch (error) {
         this.eventBuffer.unshift(...events);
       }
+    }
+    // Unlike stopRecording, drops what's buffered: the server refuses it anyway.
+    stopForSizeCap() {
+      this.capped = true;
+      if (this.stopRecordingFn) {
+        this.stopRecordingFn();
+        this.stopRecordingFn = void 0;
+      }
+      this.isRecording = false;
+      this.clearBatchTimer();
+      this.eventBuffer = [];
     }
     // Update user ID when it changes
     updateUserId(userId) {
@@ -787,8 +804,9 @@
       }
     }
     async sendSessionReplayBatch(batch) {
+      let response;
       try {
-        await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
+        response = await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -801,6 +819,11 @@
       } catch (error) {
         console.error("Failed to send session replay batch:", error);
         throw error;
+      }
+      try {
+        return await response.json();
+      } catch {
+        return;
       }
     }
     createBasePayload() {

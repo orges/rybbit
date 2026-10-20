@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { clickhouseQuery } from "../../db/clickhouse/clickhouse.js";
 import { QUERY_USER_LIMITS } from "../../db/clickhouse/queryLimits.js";
+import { isQueryUserIsolated, QUERY_USER_UNAVAILABLE_ERROR, siteScopeHeaders } from "../../db/clickhouse/queryUser.js";
 import { getOrganizationSitesForCaller } from "../../lib/auth-utils.js";
 import {
   MAX_CUSTOM_QUERY_LENGTH,
@@ -39,12 +40,22 @@ export async function executeScopedQuery(query: string, siteIds: number[]) {
   const validationError = validateScopedQuery(query);
   if (validationError) throw new Error(validationError);
 
+  // The row policy on `events` admits only the sites named in the scope header.
+  // Without that header the policy hides every row, so a missing one would read
+  // as "this site has no traffic" rather than as a broken query. Say so.
+  if (!(await isQueryUserIsolated())) {
+    throw new Error(QUERY_USER_UNAVAILABLE_ERROR);
+  }
+
   const result = await clickhouseQuery.query({
     query: `WITH scoped_events AS (
       ${scopedEventsCte(siteIds)}
     ) SELECT * FROM (${normalizeCustomQuery(query)}) LIMIT {limit:UInt32}`,
     format: "JSONEachRow",
     query_params: { siteIds, limit: QUERY_USER_LIMITS.maxResultRows },
+    // The rybbit_query row policy only admits rows from these sites, so the
+    // scoped_events CTE isn't the only thing keeping the query in tenant.
+    http_headers: siteScopeHeaders(siteIds),
     // Execution limits (readonly, max_execution_time, max_memory_usage,
     // max_result_rows, …) come from the rybbit_query settings profile and are
     // pinned there with constraints; sending them here would be rejected.
@@ -88,6 +99,10 @@ export async function runCustomQuery(
       return reply.status(403).send({ error: "No access to the requested site" });
     }
     siteIds = [body.data.siteId];
+  }
+
+  if (!(await isQueryUserIsolated())) {
+    return reply.status(503).send({ error: QUERY_USER_UNAVAILABLE_ERROR });
   }
 
   try {

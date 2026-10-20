@@ -7,6 +7,15 @@ vi.mock("../../db/clickhouse/clickhouse.js", () => ({
   clickhouseQuery: { query: vi.fn() },
 }));
 
+// The row policy on `events` is what keeps a query in tenant, and reading it
+// needs a live ClickHouse. The wrapper refuses to query without it, so the
+// tests say it is there.
+vi.mock("../../db/clickhouse/queryUser.js", () => ({
+  isQueryUserIsolated: async () => true,
+  siteScopeHeaders: (siteIds: number[]) => ({ "X-Rybbit-Site-Ids": JSON.stringify(siteIds) }),
+  QUERY_USER_UNAVAILABLE_ERROR: "Custom SQL is unavailable: the ClickHouse query user is not fully provisioned.",
+}));
+
 // executeScopedQuery's module pulls in the auth chain, which resolves a base URL
 // at import time. Only executeScopedQuery is under test here; the handler is not.
 vi.mock("../../lib/auth-utils.js", () => ({
@@ -104,6 +113,18 @@ describe("executeScopedQuery", () => {
     // A literal id in the text would be the one thing a query could not outvote.
     expect(query).not.toMatch(/\b1\b/);
     expect(query).toContain("site_id IN {siteIds:Array(UInt16)}");
+  });
+
+  /**
+   * The row policy on `events` admits only the sites named in this header. Left
+   * off, the policy hides every row and the query reads as "this site has no
+   * traffic" — a confident answer about an empty site rather than a broken
+   * query. So the header is asserted, not assumed.
+   */
+  it("sends the site scope the row policy admits", async () => {
+    await executeScopedQuery("SELECT count() FROM scoped_events", [1, 2]);
+    const call = vi.mocked(clickhouseQuery.query).mock.calls[0][0] as { http_headers?: Record<string, string> };
+    expect(call.http_headers?.["X-Rybbit-Site-Ids"]).toBe("[1,2]");
   });
 
   it("hides site_id from a single-site scope, so a query cannot name another tenant", async () => {
