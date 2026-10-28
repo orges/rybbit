@@ -1,6 +1,6 @@
 "use client";
 
-import { useMeasure, useMediaQuery } from "@uidotdev/usehooks";
+import { useMeasure } from "@uidotdev/usehooks";
 import { Video } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useEffect, useState } from "react";
@@ -13,6 +13,7 @@ import { ReplayBreadcrumbs } from "@/components/replay/ReplayBreadcrumbs";
 import { ReplayPlayer } from "@/components/replay/player/ReplayPlayer";
 import { ReplayDrawer } from "@/components/Sessions/ReplayDrawer";
 import { useReplayStore } from "@/components/replay/replayStore";
+import useMediaQuery from "@/components/ui/hooks/useMediaQuery";
 import { useSetPageTitle } from "../../../hooks/useSetPageTitle";
 import { SESSION_REPLAY_PAGE_FILTERS } from "../../../lib/filterGroups";
 import { SubHeader } from "../components/SubHeader/SubHeader";
