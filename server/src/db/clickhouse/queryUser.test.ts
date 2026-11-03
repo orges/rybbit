@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  exec: vi.fn(async (_args: { query: string }) => ({})),
+  command: vi.fn(async (_args: { query: string }) => ({})),
   query: vi.fn(),
   queryUserQuery: vi.fn(async () => ({ json: async () => [] })),
 }));
 
 vi.mock("./client.js", () => ({
   CLICKHOUSE_QUERY_USER: "rybbit_query",
-  clickhouse: { exec: mocks.exec, query: mocks.query },
+  clickhouse: { command: mocks.command, query: mocks.query },
   clickhouseQuery: { query: mocks.queryUserQuery },
 }));
 
 import { buildQueryUserStatements, provisionQueryUser, siteScopeHeaders } from "./queryUser.js";
 
 const rows = (data: unknown[]) => ({ json: async () => data });
-const executed = () => mocks.exec.mock.calls.map(([args]) => args.query);
+const executed = () => mocks.command.mock.calls.map(([args]) => args.query);
 
 describe("buildQueryUserStatements", () => {
   it("escapes the password and pins every limit as READONLY", () => {
@@ -96,7 +96,7 @@ describe("provisionQueryUser", () => {
   });
 
   it("never grants when a setup statement fails", async () => {
-    mocks.exec.mockRejectedValueOnce(new Error("no access_management"));
+    mocks.command.mockRejectedValueOnce(new Error("no access_management"));
     await provisionQueryUser();
     expect(executed().some(q => q.startsWith("GRANT"))).toBe(false);
   });

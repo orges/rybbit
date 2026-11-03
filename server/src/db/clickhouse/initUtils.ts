@@ -10,7 +10,7 @@ export async function execClickhouseInitStep(
   options?: { optional?: boolean; lockAcquireTimeoutSeconds?: number }
 ) {
   try {
-    await clickhouse.exec({
+    await clickhouse.command({
       query,
       clickhouse_settings: options?.lockAcquireTimeoutSeconds
         ? { lock_acquire_timeout: options.lockAcquireTimeoutSeconds }

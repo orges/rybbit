@@ -205,7 +205,7 @@ async function main() {
     for (const table of opts.tables) {
       const target = TARGET_TABLES[table];
       console.log(`\nTRUNCATE ${target}`);
-      await clickhouse.exec({ query: `TRUNCATE TABLE ${target}` });
+      await clickhouse.command({ query: `TRUNCATE TABLE ${target}` });
     }
   }
 
@@ -224,7 +224,7 @@ async function main() {
         console.log(insertSql.trim());
       } else {
         process.stdout.write(`  ${month.label}... `);
-        await clickhouse.exec({ query: insertSql });
+        await clickhouse.command({ query: insertSql });
         console.log(`${((Date.now() - t0) / 1000).toFixed(1)}s`);
       }
     }

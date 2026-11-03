@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
 }));
 
 const mocks = vi.hoisted(() => ({
-  exec: vi.fn(),
+  command: vi.fn(),
   insert: vi.fn(),
   query: vi.fn(),
   logger: {
@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@clickhouse/client", () => ({
   createClient: () => ({
-    exec: mocks.exec,
+    command: mocks.command,
     insert: mocks.insert,
     query: mocks.query,
   }),
@@ -39,7 +39,7 @@ vi.mock("../../lib/logger/logger.js", () => ({
 import { initializeClickhouse } from "./clickhouse.js";
 
 function executedQueries() {
-  return mocks.exec.mock.calls.map(([args]) => args.query as string);
+  return mocks.command.mock.calls.map(([args]) => args.query as string);
 }
 
 function findSessionHourlyCreateQuery() {
@@ -52,7 +52,7 @@ describe("session hourly materialized view initialization", () => {
     state.existingSessionHourlyView = undefined;
     state.existingColumns = {};
     state.timezone = "UTC";
-    mocks.exec.mockResolvedValue(undefined);
+    mocks.command.mockResolvedValue(undefined);
     mocks.query.mockImplementation(
       async ({ query, query_params }: { query: string; query_params?: { table?: string } }) => {
         if (query.includes("FROM system.columns")) {
@@ -139,7 +139,7 @@ describe("UTC time columns", () => {
     state.existingSessionHourlyView = undefined;
     state.existingColumns = {};
     state.timezone = "UTC";
-    mocks.exec.mockResolvedValue(undefined);
+    mocks.command.mockResolvedValue(undefined);
     mocks.query.mockImplementation(
       async ({ query, query_params }: { query: string; query_params?: { table?: string } }) => {
         if (query.includes("FROM system.columns")) {
@@ -231,7 +231,7 @@ describe("UTC time columns", () => {
 
   it("keeps starting when the timezone migration fails", async () => {
     state.existingColumns = { events: [{ name: "timestamp", type: "DateTime" }] };
-    mocks.exec.mockImplementation(async ({ query }: { query: string }) => {
+    mocks.command.mockImplementation(async ({ query }: { query: string }) => {
       if (/MODIFY COLUMN/.test(query)) throw new Error("ALTER refused");
     });
 

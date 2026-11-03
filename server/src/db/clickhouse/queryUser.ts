@@ -97,15 +97,15 @@ async function rowPoliciesHideUnnamedUsers(database: string, user: string): Prom
   const table = `${database}.rybbit_row_policy_probe_${randomBytes(4).toString("hex")}`;
   const policy = `rybbit_row_policy_probe ON ${table}`;
   try {
-    await clickhouse.exec({ query: `CREATE TABLE ${table} (x UInt8) ENGINE = Memory` });
-    await clickhouse.exec({ query: `INSERT INTO ${table} VALUES (1)` });
-    await clickhouse.exec({ query: `CREATE ROW POLICY ${policy} USING 0 TO ${user}` });
+    await clickhouse.command({ query: `CREATE TABLE ${table} (x UInt8) ENGINE = Memory` });
+    await clickhouse.command({ query: `INSERT INTO ${table} VALUES (1)` });
+    await clickhouse.command({ query: `CREATE ROW POLICY ${policy} USING 0 TO ${user}` });
     const result = await clickhouse.query({ query: `SELECT count() AS c FROM ${table}`, format: "JSONEachRow" });
     const [row] = await result.json<{ c: string | number }>();
     return Number(row?.c) === 0;
   } finally {
-    await clickhouse.exec({ query: `DROP ROW POLICY IF EXISTS ${policy}` }).catch(() => undefined);
-    await clickhouse.exec({ query: `DROP TABLE IF EXISTS ${table}` }).catch(() => undefined);
+    await clickhouse.command({ query: `DROP ROW POLICY IF EXISTS ${policy}` }).catch(() => undefined);
+    await clickhouse.command({ query: `DROP TABLE IF EXISTS ${table}` }).catch(() => undefined);
   }
 }
 
@@ -117,7 +117,7 @@ export async function provisionQueryUser() {
   try {
     const { setup, access } = buildQueryUserStatements(database, user, password);
     for (const query of setup) {
-      await clickhouse.exec({ query });
+      await clickhouse.command({ query });
     }
     // Roles carry their own row policies, which would OR with the site scope;
     // REVOKE ALL doesn't touch role grants, so drop them explicitly.
@@ -129,11 +129,11 @@ export async function provisionQueryUser() {
       })
       .then(result => result.json<{ role: string }>());
     for (const { role } of roles) {
-      await clickhouse.exec({ query: `REVOKE ${quoteIdentifier(role)} FROM ${user}` });
+      await clickhouse.command({ query: `REVOKE ${quoteIdentifier(role)} FROM ${user}` });
     }
     if (await rowPoliciesHideUnnamedUsers(database, user)) {
-      await clickhouse.exec({ query: `REVOKE ALL ON *.* FROM ${user}` });
-      await clickhouse.exec({ query: `DROP ROW POLICY IF EXISTS ${siteScopePolicyName(user)} ON ${database}.events` });
+      await clickhouse.command({ query: `REVOKE ALL ON *.* FROM ${user}` });
+      await clickhouse.command({ query: `DROP ROW POLICY IF EXISTS ${siteScopePolicyName(user)} ON ${database}.events` });
       logger.error(
         { user },
         "ClickHouse hides rows from users without a row policy (access_control_improvements.users_without_row_policies_can_read_rows=false). Custom SQL queries and dashboards are disabled; set it to true and restart."
@@ -141,7 +141,7 @@ export async function provisionQueryUser() {
       return;
     }
     for (const query of access) {
-      await clickhouse.exec({ query });
+      await clickhouse.command({ query });
     }
     logger.info({ user, database }, "ClickHouse query user provisioned");
   } catch (error) {
