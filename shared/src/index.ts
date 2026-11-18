@@ -11,3 +11,4 @@ export * from "./aiOperators";
 export * from "./annotations";
 export * from "./experimentStats";
 export * from "./permissions";
+export * from "./dpa";
