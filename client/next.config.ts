@@ -36,6 +36,21 @@ const nextConfig: NextConfig = {
       // analytics. None of it should be findable.
       { source: "/", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
       { source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      {
+        // Nothing may frame the app from another origin: a signed-in page in
+        // someone else's iframe (OAuth consent above all) is a click away
+        // from being used against the person looking at it. The embed widget
+        // is left out; its route handler sets its own policy.
+        source: "/((?!widget/).*)",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }],
+      },
+      {
+        // Dashboard embeds are private-link pages (/{siteId}/{privateKey}/...)
+        // made to be framed, and read-only for whoever holds the link. Listed
+        // last: for the same header, the last matching rule wins.
+        source: "/:siteId/:privateKey([a-fA-F0-9]{12})/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
     ];
   },
 };

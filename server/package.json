@@ -33,6 +33,7 @@
     "db:drop": "drizzle-kit drop --config=drizzle.config.ts",
     "db:check": "drizzle-kit check --config=drizzle.config.ts",
     "update:datacenter-asns": "node src/services/tracker/botBlocking/update-datacenter-asns.mjs",
+    "update:proxy-edge-asns": "node src/services/tracker/update-proxy-edge-asns.mjs",
     "knip": "knip",
     "format": "prettier --write \"src/**/*.{js,ts,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{js,ts,json,md}\"",
@@ -98,11 +99,11 @@
     "esbuild": "^0.25.5",
     "ioredis-mock": "^8.13.1",
     "jsdom": "^26.1.0",
-    "knip": "^5.60.2",
+    "knip": "^6.45.1",
     "kysely": "0.28.17",
     "prettier": "^3.8.1",
     "terser": "^5.40.0",
-    "typescript": "^5.8.3",
+    "typescript": "^7.0.2",
     "vitest": "^3.2.7"
   }
 }

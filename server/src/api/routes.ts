@@ -180,6 +180,7 @@ import {
   getSubscription,
   handleWebhook,
   previewSubscriptionUpdate,
+  retryPayment,
   submitCancellationFeedback,
   updateSubscription,
 } from "./stripe/index.js";
@@ -684,6 +685,7 @@ async function stripeAdminRoutes(fastify: FastifyInstance) {
     // Stripe Routes
     fastify.post("/stripe/create-checkout-session", authenticated("deny-scoped"), createCheckoutSession);
     fastify.post("/stripe/create-portal-session", authenticated("deny-scoped"), createPortalSession);
+    fastify.post("/stripe/retry-payment", authenticated("deny-scoped"), retryPayment);
     fastify.post("/stripe/preview-subscription-update", authenticated("deny-scoped"), previewSubscriptionUpdate);
     fastify.post("/stripe/update-subscription", authenticated("deny-scoped"), updateSubscription);
     fastify.get("/stripe/subscription", authenticated("deny-scoped"), getSubscription);
